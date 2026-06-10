@@ -1,0 +1,3 @@
+sadit- jun 10 : studied leader -follower , peer to peer , client server 
+				heartbeat , ...
+				for the network module
