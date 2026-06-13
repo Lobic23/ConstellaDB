@@ -1,12 +1,12 @@
-use crate::codec::{read_message, write_message};
 use protocol_module::message::{Message, MessageType};
+use protocol_module::handler::ProtocolHandler;
+use protocol_module::serializer::BincodeSerializer;
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 
 pub struct Client {
     node_id: String,
-    reader: tokio::net::tcp::OwnedReadHalf,
-    writer: tokio::net::tcp::OwnedWriteHalf,
+    handler: ProtocolHandler,
     next_id: u64,
 }
 
@@ -14,17 +14,14 @@ impl Client {
     pub async fn connect(addr: &str, node_id: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let stream = TcpStream::connect(addr).await?;
         println!("[client] connected to {}", addr);
-        let (reader, writer) = stream.into_split();
 
         Ok(Client {
             node_id: node_id.to_string(),
-            reader,
-            writer,
+            handler: ProtocolHandler::new(stream, Box::new(BincodeSerializer)),
             next_id: 0,
         })
     }
 
-    /// Sends a PING and waits for PONG. Returns round-trip duration.
     pub async fn ping(&mut self) -> Result<Duration, Box<dyn std::error::Error + Send + Sync>> {
         let id = self.next_id;
         self.next_id += 1;
@@ -33,9 +30,9 @@ impl Client {
             .with_payload(b"PING".to_vec());
 
         let start = Instant::now();
-        write_message(&mut self.writer, &ping).await?;
+        self.handler.send(&ping).await?;
 
-        let response = read_message(&mut self.reader).await?;
+        let response = self.handler.receive().await?;
         let rtt = start.elapsed();
 
         if response.msg_type == MessageType::Heartbeat && response.payload == b"PONG" {

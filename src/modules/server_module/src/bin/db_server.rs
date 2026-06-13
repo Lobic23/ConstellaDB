@@ -1,8 +1,9 @@
-use server_module::codec::{read_message, write_message};
 use server_module::db::execute;
 use cmd_module::parse_command;
 use db_module::Engine;
 use protocol_module::message::{Message, MessageType};
+use protocol_module::handler::ProtocolHandler;
+use protocol_module::serializer::BincodeSerializer;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use std::sync::Arc;
@@ -10,8 +11,6 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() {
     let addr = "0.0.0.0:7878";
-
-    // Engine is shared across all client tasks
     let engine = Arc::new(Mutex::new(Engine::new()));
 
     let listener = TcpListener::bind(addr).await.unwrap();
@@ -24,12 +23,11 @@ async fn main() {
         let engine = Arc::clone(&engine);
 
         tokio::spawn(async move {
-            let (mut reader, mut writer) = stream.into_split();
+            let mut handler = ProtocolHandler::new(stream, Box::new(BincodeSerializer));
 
             loop {
-                match read_message(&mut reader).await {
+                match handler.receive().await {
                     Ok(msg) => {
-                        // Only handle Query messages
                         if msg.msg_type != MessageType::Query {
                             eprintln!("[db_server] unexpected msg type from {}", peer);
                             continue;
@@ -38,7 +36,9 @@ async fn main() {
                         let sql = match String::from_utf8(msg.payload.clone()) {
                             Ok(s)  => s,
                             Err(_) => {
-                                let _ = send_error(&mut writer, msg.id, "invalid UTF-8 payload").await;
+                                let err = Message::new(msg.id, MessageType::Error, "server".to_string())
+                                    .with_payload(b"invalid UTF-8 payload".to_vec());
+                                let _ = handler.send(&err).await;
                                 continue;
                             }
                         };
@@ -58,7 +58,7 @@ async fn main() {
                         let response = Message::new(msg.id, MessageType::Response, "server".to_string())
                             .with_payload(result.into_bytes());
 
-                        if let Err(e) = write_message(&mut writer, &response).await {
+                        if let Err(e) = handler.send(&response).await {
                             eprintln!("[db_server] write error for {}: {}", peer, e);
                             break;
                         }
@@ -71,14 +71,4 @@ async fn main() {
             }
         });
     }
-}
-
-async fn send_error(
-    writer: &mut tokio::net::tcp::OwnedWriteHalf,
-    id: u64,
-    msg: &str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let err_msg = Message::new(id, MessageType::Error, "server".to_string())
-        .with_payload(msg.as_bytes().to_vec());
-    write_message(writer, &err_msg).await
 }

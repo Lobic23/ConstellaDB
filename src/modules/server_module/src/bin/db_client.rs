@@ -1,5 +1,6 @@
-use server_module::codec::{read_message, write_message};
 use protocol_module::message::{Message, MessageType};
+use protocol_module::handler::ProtocolHandler;
+use protocol_module::serializer::BincodeSerializer;
 use tokio::net::TcpStream;
 use std::io::{self, Write};
 
@@ -17,7 +18,7 @@ async fn main() {
     println!("[db_client] connected to {} as '{}'", addr, node_id);
     println!("[db_client] type SQL and press Enter. Ctrl+C to quit.\n");
 
-    let (mut reader, mut writer) = stream.into_split();
+    let mut handler = ProtocolHandler::new(stream, Box::new(BincodeSerializer));
     let mut next_id: u64 = 0;
     let stdin = io::stdin();
 
@@ -27,7 +28,7 @@ async fn main() {
 
         let mut input = String::new();
         match stdin.read_line(&mut input) {
-            Ok(0) => break, // EOF
+            Ok(0) => break,
             Ok(_) => {}
             Err(e) => { eprintln!("stdin error: {e}"); break; }
         }
@@ -39,20 +40,14 @@ async fn main() {
             .with_payload(sql.as_bytes().to_vec());
         next_id += 1;
 
-        if let Err(e) = write_message(&mut writer, &msg).await {
+        if let Err(e) = handler.send(&msg).await {
             eprintln!("send error: {e}");
             break;
         }
 
-        match read_message(&mut reader).await {
-            Ok(resp) => {
-                let text = String::from_utf8_lossy(&resp.payload);
-                println!("{}", text);
-            }
-            Err(e) => {
-                eprintln!("recv error: {e}");
-                break;
-            }
+        match handler.receive().await {
+            Ok(resp) => println!("{}", String::from_utf8_lossy(&resp.payload)),
+            Err(e)   => { eprintln!("recv error: {e}"); break; }
         }
     }
 }

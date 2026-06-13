@@ -1,5 +1,6 @@
-use crate::codec::{read_message, write_message};
 use protocol_module::message::{Message, MessageType};
+use protocol_module::handler::ProtocolHandler;
+use protocol_module::serializer::BincodeSerializer;
 use tokio::net::TcpListener;
 
 pub struct Server {
@@ -20,10 +21,10 @@ impl Server {
             println!("[server] client connected: {}", peer);
 
             tokio::spawn(async move {
-                let (mut reader, mut writer) = stream.into_split();
+                let mut handler = ProtocolHandler::new(stream, Box::new(BincodeSerializer));
 
                 loop {
-                    match read_message(&mut reader).await {
+                    match handler.receive().await {
                         Ok(msg) => {
                             if msg.msg_type == MessageType::Heartbeat
                                 && msg.payload == b"PING"
@@ -33,7 +34,7 @@ impl Server {
                                 let pong = Message::new(msg.id, MessageType::Heartbeat, "server".to_string())
                                     .with_payload(b"PONG".to_vec());
 
-                                if let Err(e) = write_message(&mut writer, &pong).await {
+                                if let Err(e) = handler.send(&pong).await {
                                     eprintln!("[server] write error for {}: {}", peer, e);
                                     break;
                                 }

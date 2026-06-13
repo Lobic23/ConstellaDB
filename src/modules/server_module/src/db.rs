@@ -1,6 +1,7 @@
 use cmd_module::Command;
 use db_module::{Engine, Entity};
 
+// @TODO : move this part to db_module or the protocol module
 pub fn execute(engine: &mut Engine, cmd: Command) -> String {
     match cmd {
         Command::CreateTable(table) => {
