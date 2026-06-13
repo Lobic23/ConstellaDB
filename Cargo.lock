@@ -7,6 +7,10 @@ name = "ConstellaDB"
 version = "0.1.0"
 dependencies = [
  "cmd_module",
+ "db_module",
+ "network_module",
+ "protocol_module",
+ "server_module",
 ]
 
 [[package]]
@@ -228,6 +232,17 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "server_module"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "cmd_module",
+ "db_module",
+ "protocol_module",
+ "tokio",
 ]
 
 [[package]]

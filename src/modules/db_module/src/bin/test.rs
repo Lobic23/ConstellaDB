@@ -183,7 +183,7 @@ fn main() {
 
   println!("{:#?}", result);
 
-  println!("=== DROP TABLE ===");
+  // println!("=== DROP TABLE ===");
 
-  engine.drop_table("user_table").unwrap();
+  // engine.drop_table("user_table").unwrap();
 }

@@ -1,9 +1,10 @@
 [workspace]
 members = [
   "src/modules/cmd_module",
-  "src/modules/db_module", 
+  "src/modules/db_module",
   "src/modules/network_module",
   "src/modules/protocol_module",
+  "src/modules/server_module",
 ]
 
 [package]
@@ -13,8 +14,14 @@ edition = "2024"
 
 [dependencies]
 cmd_module = { path = "src/modules/cmd_module" }
+db_module = { path = "src/modules/db_module" }
+network_module = { path = "src/modules/network_module" }
+protocol_module = { path = "src/modules/protocol_module" }
+server_module = { path = "src/modules/server_module" }
+
 
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 tokio = { version = "1", features = ["full"] }
+bincode = "1"
