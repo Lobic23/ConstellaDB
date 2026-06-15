@@ -9,7 +9,7 @@ use db_module::{Table, Attr, Type, Value, Entity, Data, Condition, Operator};
 use crate::ast::Command;
 use crate::error::CmdError;
 
-pub fn parse(input: &str) -> Result<Command, CmdError> {
+pub fn parse_cmd(input: &str) -> Result<Command, CmdError> {
     let dialect = GenericDialect {};
     let mut stmts = SqlParser::parse_sql(&dialect, input)
         .map_err(|e| CmdError::Syntax(e.to_string()))?;

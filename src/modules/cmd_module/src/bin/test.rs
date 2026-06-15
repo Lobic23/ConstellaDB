@@ -1,4 +1,4 @@
-use cmd_module::{parse_command, Command};
+use cmd_module::{execute, parse_cmd};
 use db_module::Engine;
 
 fn main() {
@@ -19,61 +19,16 @@ fn main() {
 
     for sql in commands {
         println!("\n>>> {sql}");
-        match parse_command(sql) {
-            Ok(cmd) => run(&mut engine, cmd),
-            Err(e) => println!("Parse error: {e}"),
-        }
+
+        let output = match parse_cmd(sql) {
+            Ok(cmd) => execute(&mut engine, cmd),
+            Err(e) => format!("Parse error: {e}"),
+        };
+
+        println!("{output}");
     }
 }
 
-fn run(engine: &mut Engine, cmd: Command) {
-    match cmd {
-        Command::CreateTable(table) => {
-            match engine.create_table(&table) {
-                Ok(_) => println!("OK: table '{}' created", table.name),
-                Err(e) => println!("Error: {e}"),
-            }
-        }
-        Command::DropTable(name) => {
-            match engine.drop_table(&name) {
-                Ok(_) => println!("OK: table '{}' dropped", name),
-                Err(e) => println!("Error: {e}"),
-            }
-        }
-        Command::Insert(entity) => {
-            match engine.insert(&entity) {
-                Ok(_) => println!("OK: 1 row inserted into '{}'", entity.of),
-                Err(e) => println!("Error: {e}"),
-            }
-        }
-        Command::Select { table, attrs, conditions } => {
-            let attr_refs: Vec<&str> = attrs.iter().map(|s| s.as_str()).collect();
-            match engine.select(&table, attr_refs, conditions) {
-                Ok(rows) => {
-                    println!("OK: {} row(s)", rows.len());
-                    for row in &rows {
-                        let fields: Vec<String> = row.data.iter()
-                            .map(|d| format!("{}={:?}", d.name, d.value))
-                            .collect();
-                        println!("  {}", fields.join(", "));
-                    }
-                }
-                Err(e) => println!("Error: {e}"),
-            }
-        }
-        Command::Update { table, updates, conditions } => {
-            match engine.update(&table, updates, conditions) {
-                Ok(n) => println!("OK: {n} row(s) updated"),
-                Err(e) => println!("Error: {e}"),
-            }
-        }
-        Command::Delete { table, conditions } => {
-            match engine.delete(&table, conditions) {
-                Ok(n) => println!("OK: {n} row(s) deleted"),
-                Err(e) => println!("Error: {e}"),
-            }
-        }
-    }
-}
+
 
 

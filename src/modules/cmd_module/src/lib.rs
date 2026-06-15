@@ -1,10 +1,9 @@
 mod ast;
 mod parser;
 mod error;
+mod executor;
 
 pub use ast::Command;
 pub use error::CmdError;
-
-pub fn parse_command(input: &str) -> Result<Command, CmdError> {
-    parser::parse(input)
-}
+pub use executor::execute;
+pub use parser::parse_cmd;

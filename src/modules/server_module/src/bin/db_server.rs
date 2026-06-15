@@ -1,6 +1,6 @@
-use server_module::db::execute;
-use cmd_module::parse_command;
+
 use db_module::Engine;
+use cmd_module::{execute, parse_cmd};
 use protocol_module::message::{Message, MessageType};
 use protocol_module::handler::ProtocolHandler;
 use protocol_module::serializer::BincodeSerializer;
@@ -45,7 +45,7 @@ async fn main() {
 
                         println!("[db_server] {} >>> {}", peer, sql.trim());
 
-                        let result = match parse_command(&sql) {
+                        let result = match parse_cmd(&sql) {
                             Ok(cmd) => {
                                 let mut eng = engine.lock().await;
                                 execute(&mut eng, cmd)
