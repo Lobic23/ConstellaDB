@@ -254,10 +254,14 @@ impl Engine {
       None    => return Err(format!("Table with name '{}' doesn't exists", table_name)),
     };
 
+    let select_all = attrs.contains(&"*");
+
+    if !select_all {
     // Verify attributes
-    for attr in &attrs {
-      if !table.attr_exists(attr) {
-        return Err(format!("Attribute '{}' doesn't exists in table {}", attr, table.name));
+      for attr in &attrs {
+        if !table.attr_exists(attr) {
+          return Err(format!("Attribute '{}' doesn't exists in table {}", attr, table.name));
+        }
       }
     }
 
@@ -285,10 +289,14 @@ impl Engine {
 
       // If all condition passes then its the result
       if matches {
-        let filtered_data: Vec<Data> = entity.data
-          .into_iter()
-          .filter(|d| attrs.contains(&d.name.as_str()))
-          .collect();
+          let filtered_data: Vec<Data> = if select_all {
+              entity.data
+          } else {
+              entity.data
+                  .into_iter()
+                  .filter(|d| attrs.contains(&d.name.as_str()))
+                  .collect()
+          };
 
         result.push(Entity {
           of: entity.of,

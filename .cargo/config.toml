@@ -2,6 +2,7 @@
 net = "run -p network_module"
 db = "run -p db_module"
 prot = " run -p protocol_module"
+cmd = "run -p cmd_module"
 
 
 # this way i just need to do cargo net to run the network module seperately

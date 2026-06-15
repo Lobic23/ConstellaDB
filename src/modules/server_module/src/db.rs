@@ -26,11 +26,6 @@ pub fn execute(engine: &mut Engine, cmd: Command) -> String {
         }
 
         Command::Select { table, attrs, conditions } => {
-            let attrs = if attrs == ["*"] {
-                vec!["id".to_string(), "name".to_string(), "age".to_string()]
-            } else {
-                attrs
-            };
             let attr_refs: Vec<&str> = attrs.iter().map(|s| s.as_str()).collect();
 
             match engine.select(&table, attr_refs, conditions) {

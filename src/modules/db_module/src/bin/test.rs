@@ -53,7 +53,7 @@ fn main() {
 
   let result = engine.select(
     "user_table",
-    vec!["id", "name", "password"],
+    vec!["*"],
     vec![],
   ).unwrap();
 
