@@ -1,4 +1,4 @@
-pub mod message;
+pub mod client;
 pub mod codec;
 pub mod listener;
-pub mod client;
+pub mod message;

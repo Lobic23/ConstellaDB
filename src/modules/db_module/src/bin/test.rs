@@ -51,135 +51,119 @@ fn main() {
 
   println!("=== SELECT ALL ===");
 
-  let result = engine.select(
-    "user_table",
-    vec!["*"],
-    vec![],
-  ).unwrap();
+  let result = engine.select("user_table", vec!["*"], vec![]).unwrap();
 
   println!("{:#?}", result);
 
   println!("=== SELECT WHERE id = 5 ===");
 
-  let result = engine.select(
-    "user_table",
-    vec!["id", "name"],
-    vec![
-      Condition::Compare {
+  let result = engine
+    .select(
+      "user_table",
+      vec!["id", "name"],
+      vec![Condition::Compare {
         attr: "id".to_string(),
         value: Value::Int(5),
         op: Operator::Eq,
-      },
-    ],
-  ).unwrap();
+      }],
+    )
+    .unwrap();
 
   println!("{:#?}", result);
 
   println!("=== SELECT WHERE id > 3 AND id < 7 ===");
 
-  let result = engine.select(
-    "user_table",
-    vec!["id", "name"],
-    vec![
-      Condition::And(
-        Box::new(
-          Condition::Compare {
-            attr: "id".to_string(),
-            value: Value::Int(3),
-            op: Operator::Gt,
-          },
-        ),
-        Box::new(
-          Condition::Compare {
-            attr: "id".to_string(),
-            value: Value::Int(7),
-            op: Operator::Lt,
-          },
-        ),
-      ),
-    ],
-  ).unwrap();
+  let result = engine
+    .select(
+      "user_table",
+      vec!["id", "name"],
+      vec![Condition::And(
+        Box::new(Condition::Compare {
+          attr: "id".to_string(),
+          value: Value::Int(3),
+          op: Operator::Gt,
+        }),
+        Box::new(Condition::Compare {
+          attr: "id".to_string(),
+          value: Value::Int(7),
+          op: Operator::Lt,
+        }),
+      )],
+    )
+    .unwrap();
 
   println!("{:#?}", result);
 
   println!("=== UPDATE id = 5 ===");
 
-  engine.update(
-    "user_table",
-    vec![
-      Data {
+  engine
+    .update(
+      "user_table",
+      vec![Data {
         name: "name".to_string(),
         value: Value::VarChar("UPDATED".to_string()),
-      },
-    ],
-    vec![
-      Condition::Compare {
+      }],
+      vec![Condition::Compare {
         attr: "id".to_string(),
         value: Value::Int(5),
         op: Operator::Eq,
-      },
-    ],
-  ).unwrap();
+      }],
+    )
+    .unwrap();
 
-  let result = engine.select(
-    "user_table",
-    vec!["id", "name"],
-    vec![
-      Condition::Compare {
+  let result = engine
+    .select(
+      "user_table",
+      vec!["id", "name"],
+      vec![Condition::Compare {
         attr: "id".to_string(),
         value: Value::Int(5),
         op: Operator::Eq,
-      },
-    ],
-  ).unwrap();
+      }],
+    )
+    .unwrap();
 
   println!("{:#?}", result);
 
   println!("=== DELETE id < 3 ===");
 
-  engine.delete(
-    "user_table",
-    vec![
-      Condition::Compare {
+  engine
+    .delete(
+      "user_table",
+      vec![Condition::Compare {
         attr: "id".to_string(),
         value: Value::Int(3),
         op: Operator::Lt,
-      },
-    ],
-  ).unwrap();
+      }],
+    )
+    .unwrap();
 
-  let result = engine.select(
-    "user_table",
-    vec!["id", "name"],
-    vec![],
-  ).unwrap();
+  let result = engine
+    .select("user_table", vec!["id", "name"], vec![])
+    .unwrap();
 
   println!("{:#?}", result);
 
   println!("=== SELECT WHERE id = 4 OR id = 8 ===");
 
-  let result = engine.select(
-    "user_table",
-    vec!["id", "name"],
-    vec![
-      Condition::Or(
-        Box::new(
-          Condition::Compare {
-            attr: "id".to_string(),
-            value: Value::Int(4),
-            op: Operator::Eq,
-          },
-        ),
-        Box::new(
-          Condition::Compare {
-            attr: "id".to_string(),
-            value: Value::Int(8),
-            op: Operator::Eq,
-          },
-        ),
-      ),
-    ],
-  ).unwrap();
+  let result = engine
+    .select(
+      "user_table",
+      vec!["id", "name"],
+      vec![Condition::Or(
+        Box::new(Condition::Compare {
+          attr: "id".to_string(),
+          value: Value::Int(4),
+          op: Operator::Eq,
+        }),
+        Box::new(Condition::Compare {
+          attr: "id".to_string(),
+          value: Value::Int(8),
+          op: Operator::Eq,
+        }),
+      )],
+    )
+    .unwrap();
 
   println!("{:#?}", result);
 

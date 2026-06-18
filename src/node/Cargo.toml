@@ -1,0 +1,12 @@
+[package]
+name = "node"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+protocol_module = { path = "../modules/protocol_module" }
+cmd_module = { path = "../modules/cmd_module" }
+db_module = { path = "../modules/db_module" }
+
+bincode.workspace = true
+tokio.workspace = true

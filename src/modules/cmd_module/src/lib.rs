@@ -1,7 +1,7 @@
 mod ast;
-mod parser;
 mod error;
 mod executor;
+mod parser;
 
 pub use ast::Command;
 pub use error::CmdError;
