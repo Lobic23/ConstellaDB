@@ -1,10 +1,11 @@
 [workspace]
 members = [
   "src/modules/cmd_module",
-  "src/modules/db_module",
+  "src/modules/db_module", "src/modules/job_scheduler",
   "src/modules/network_module",
   "src/modules/protocol_module",
   "src/modules/server_module",
+  "src/modules/job_scheduler",
 ]
 
 [package]
