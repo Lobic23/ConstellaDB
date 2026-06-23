@@ -8,5 +8,7 @@ protocol_module = { path = "../modules/protocol_module" }
 cmd_module = { path = "../modules/cmd_module" }
 db_module = { path = "../modules/db_module" }
 
+clap.workspace = true
+uuid.workspace = true
 bincode.workspace = true
 tokio.workspace = true

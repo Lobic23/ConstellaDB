@@ -19,6 +19,8 @@ impl ProtocolHandler {
     }
   }
 
+  /// Writes a length-prefixed message to the stream.
+  /// Format: [4 bytes: u32 big-endian length][N bytes: JSON body]
   pub async fn send(
     &mut self,
     message: &Message,
@@ -36,6 +38,8 @@ impl ProtocolHandler {
     Ok(())
   }
 
+  /// Reads a length-prefixed message from the stream.
+  /// Returns None if the connection was cleanly closed.
   pub async fn receive(&mut self) -> Result<Message, Box<dyn std::error::Error + Send + Sync>> {
     let mut len_bytes = [0u8; 4];
     self.reader.read_exact(&mut len_bytes).await?;
