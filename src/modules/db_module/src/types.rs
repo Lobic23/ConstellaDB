@@ -106,13 +106,13 @@ impl fmt::Display for Value {
   }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Data {
   pub name: String,
   pub value: Value,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Entity {
   pub of: String,
   pub data: Vec<Data>,

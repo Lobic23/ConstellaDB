@@ -5,12 +5,14 @@ use clap::Parser;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use cmd_module::format_rows;
+use db_module::Entity;
 use protocol_module::{
   handler::{ReadHandler, WriteHandler},
   message::{MessageType, Message},
   serializer::BincodeSerializer,
 };
-use node::{Node, NodeStatus};
+use node::{Node, NodeStatus, Instruction};
 
 fn get_local_ip() -> std::io::Result<std::net::IpAddr> {
   let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
@@ -105,14 +107,14 @@ async fn distribute_message(msg: &Message, node: Arc<Mutex<Node>>) {
     handler.send(msg).await.unwrap();
 
     // Save the node to the instruction
-    if let Some((status, _)) = instructions.get(&msg.id) {
-      let mut s = status.lock().await;
+    if let Some(instruction) = instructions.get(&msg.id) {
+      let mut s = instruction.nodes_status.lock().await;
       s.push(NodeStatus { id: ip, status: false });
     }
   }
 
-  if let Some((status, _)) = instructions.get(&msg.id) {
-    let s = status.lock().await;
+  if let Some(instructions) = instructions.get(&msg.id) {
+    let s = instructions.nodes_status.lock().await;
     println!("[LOG] Instruction {} distributed to: {:?}", msg.id, s);
   }
 }
@@ -124,10 +126,7 @@ async fn create_new_instruction(
   write_handler: Arc<Mutex<WriteHandler>>
 ) {
   let mut n = node.lock().await;
-  n.instructions.insert(
-    msg.id,
-    (Arc::new(Mutex::new(Vec::new())), write_handler)
-  );
+  n.instructions.insert(msg.id, Instruction::new(msg.id, write_handler));
   println!("[LOG] New instruction created: {}", msg.id);
 }
 
@@ -138,8 +137,8 @@ async fn sucess_instruction_response(
   node: Arc<Mutex<Node>>
 ) {
   let n = node.lock().await;
-  if let Some((node_status, _)) = n.instructions.get(&inst_id) {
-    let mut ns = node_status.lock().await;
+  if let Some(instruction) = n.instructions.get(&inst_id) {
+    let mut ns = instruction.nodes_status.lock().await;
     for node in ns.iter_mut() {
       if node.id == node_id {
         node.status = true;
@@ -152,8 +151,8 @@ async fn sucess_instruction_response(
 /// Checks if all the nodes has completed the task for the given instruction
 async fn is_instruction_finished(inst_id: u64, node: Arc<Mutex<Node>>) -> bool {
   let n = node.lock().await;
-  if let Some((node_status, _)) = n.instructions.get(&inst_id) {
-    let mut ns = node_status.lock().await;
+  if let Some(instruction) = n.instructions.get(&inst_id) {
+    let mut ns = instruction.nodes_status.lock().await;
     for node in ns.iter_mut() {
       if !node.status {
         return false;
@@ -224,6 +223,9 @@ async fn connection_listener(
         };
         println!("[LOG] Received Response:\n{:#?}", msg);
 
+        let payload = String::from_utf8(msg.payload).unwrap();
+        let payload_json: serde_json::Value = serde_json::from_str(&payload).unwrap();
+
         // If the node is the leader then the response would be the result
         // back from the followers, so the data is collected here and checked
         // if the instruction is complete and if so then the response is sent
@@ -231,26 +233,66 @@ async fn connection_listener(
         if is_leader {
           sucess_instruction_response(msg.id, &msg.node_id, node.clone()).await;
 
-          // TODO(slok): Save the response
+          // If the rows are present in the response then append to the
+          // instructions response rows
+          if let Some(rows) = payload_json
+            .get("rows")
+            .cloned()
+            .and_then(|v| serde_json::from_value::<Vec<Entity>>(v).ok())
+          {
+            let mut n = node.lock().await;
+
+            if let Some(instruction) = n.instructions.get_mut(&msg.id) {
+              match &mut instruction.response_rows {
+                Some(existing_rows) => existing_rows.extend(rows),
+                None => instruction.response_rows = Some(rows),
+              }
+            }
+          }
+
+          // If a message is present in the response then save that to
+          // the response message of the instruction
+          if let Some(message) = payload_json
+            .get("message")
+            .and_then(|v| v.as_str())
+          {
+            let mut n = node.lock().await;
+            if let Some(instruction) = n.instructions.get_mut(&msg.id) {
+              instruction.response_message = Some(message.to_string());
+            }
+          }
 
           // The instruction is completed
           if is_instruction_finished(msg.id, node.clone()).await {
-            let n = node.lock().await;
-
             println!("[LOG] Instruction {} completed", msg.id);
 
-            // TODO(slok): Prepare proper response
-
-            // Sending the response to client
-            if let Some((_, client_write_handler)) = n.instructions.get(&msg.id) {
-              let response = Message::new(
+            // When the instruction is completed, the response is sent back
+            // to the client
+            let n = node.lock().await;
+            if let Some(instruction) = n.instructions.get(&msg.id) {
+              let mut response = Message::new(
                 msg.id,
                 MessageType::Response,
                 n.id.clone()
               );
-              let mut handler = client_write_handler.lock().await;
+
+              // If the instruction has a message then it is sent as
+              // message have more priority (eg: errors)
+              if let Some(msg) = &instruction.response_message {
+                response = response.with_payload(msg.clone().into_bytes());
+              }
+
+              // If the instruction has rows (from select) then it is
+              // formated and returned to the user
+              else if let Some(rows) = &instruction.response_rows {
+                let rows_string = format_rows(rows.to_vec());
+                response = response.with_payload(rows_string.into_bytes());
+              }
+
+              // Sending the response
+              let mut handler = instruction.client_write_handler.lock().await;
               handler.send(&response).await.unwrap();
-              println!("sent: {:#?}", response);
+              println!("[LOG] Sent: {:#?}", response);
             }
           } else {
             println!("[LOG] Instruction {} not complete", msg.id);

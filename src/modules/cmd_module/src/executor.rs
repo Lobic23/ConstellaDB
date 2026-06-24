@@ -62,7 +62,7 @@ pub fn execute(engine: &mut Engine, cmd: Command) -> ExecuteResult {
   }
 }
 
-fn format_rows(rows: Vec<Entity>) -> String {
+pub fn format_rows(rows: Vec<Entity>) -> String {
   if rows.is_empty() {
     return "OK: 0 row(s)".to_string();
   }

@@ -922,6 +922,8 @@ dependencies = [
  "cmd_module",
  "db_module",
  "protocol_module",
+ "serde",
+ "serde_json",
  "tokio",
  "uuid",
 ]
