@@ -13,6 +13,10 @@ pub struct NodeStatus {
 pub struct Node {
   pub leader: bool,
   pub id: String,
+  pub job_service: Option<(Arc<Mutex<ReadHandler>>, Arc<Mutex<WriteHandler>>)>,
+  pub job_table: HashMap<String, u64>,
+
+  // For leader
   pub followers: HashMap<
     String,
     (Arc<Mutex<ReadHandler>>, Arc<Mutex<WriteHandler>>)
@@ -21,8 +25,6 @@ pub struct Node {
     u64,
     (Arc<Mutex<Vec<NodeStatus>>>, Arc<Mutex<WriteHandler>>)
   >,
-  pub job_service: Option<(Arc<Mutex<ReadHandler>>, Arc<Mutex<WriteHandler>>)>,
-  pub job_table: HashMap<String, u64>,
 }
 
 impl Node {
