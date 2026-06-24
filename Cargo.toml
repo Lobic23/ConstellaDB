@@ -5,8 +5,9 @@ members = [
   "src/modules/network_module",
   "src/modules/protocol_module",
   "src/modules/server_module",
-  "src/node",
   "src/modules/job_scheduler",
+  "src/services/job_service",
+  "src/node",
 ]
 
 [package]
