@@ -1,0 +1,222 @@
+//=====
+// DML
+//=====
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
+
+use crate::core::Engine;
+use crate::types::{Condition, DB_DIR, Data, Entity, Type, Value};
+
+impl Engine {
+  pub fn insert(&mut self, entity: &Entity) -> Result<(), String> {
+    let table = self
+    .get_table(&entity.of)
+    .ok_or_else(|| format!("Table '{}' doesn't exist", entity.of))?
+    .clone();
+
+    // Validate the data attributes
+    self.validate_entity_data(&table, entity)?;
+
+    for data in &entity.data {
+      let attr = table.attrs.iter().find(|a| a.name == data.name).unwrap();
+      let path = PathBuf::from(DB_DIR)
+        .join(&table.name)
+        .join(format!("{}.col", &data.name));
+
+      // Open the required attribute file
+      let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path.to_str().unwrap())
+        .unwrap();
+
+      // Store the byte
+      match (&attr.data_type, &data.value) {
+        (Type::Int, Value::Int(v)) => {
+          file
+            .write_all(&v.to_le_bytes())
+            .map_err(|e| e.to_string())?;
+        }
+
+        (Type::VarChar(size), Value::VarChar(v)) => {
+          // Resizing to the varchar size
+          let mut bytes = v.as_bytes().to_vec();
+          bytes.resize(*size, 0);
+
+          file.write_all(&bytes).map_err(|e| e.to_string())?;
+        }
+
+        _ => {
+          return Err("Unreachable!".to_string());
+        }
+      }
+    }
+
+    Ok(())
+  }
+
+  pub fn select(
+    &mut self,
+    table_name: &str,
+    attrs: Vec<&str>,
+    conditions: Vec<Condition>,
+  ) -> Result<Vec<Entity>, String> {
+    let table = match self.get_table(table_name) {
+      Some(t) => t,
+      None => return Err(format!("Table with name '{}' doesn't exists", table_name)),
+    };
+
+    let select_all = attrs.contains(&"*");
+
+    if !select_all {
+      // Verify attributes
+      for attr in &attrs {
+        if !table.attr_exists(attr) {
+          return Err(format!(
+            "Attribute '{}' doesn't exists in table {}",
+            attr, table.name
+          ));
+        }
+      }
+    }
+
+    // Load all the columns
+    let mut columns: Vec<Vec<Value>> = Vec::new();
+    for attr in &table.attrs {
+      columns.push(self.load_column(table, attr)?);
+    }
+
+    // If no columns were fetched then return empty
+    if columns.is_empty() {
+      return Ok(Vec::new());
+    }
+
+    let row_count = columns[0].len();
+    let mut result: Vec<Entity> = Vec::new();
+
+    for row in 0..row_count {
+      let entity = self.build_entity(&table, &columns, row);
+
+      // Check the condition
+      let matches = conditions.iter().all(|c| self.match_condition(&entity, c));
+
+      // If all condition passes then its the result
+      if matches {
+        let filtered_data: Vec<Data> = if select_all {
+          entity.data
+        } else {
+          entity
+            .data
+            .into_iter()
+            .filter(|d| attrs.contains(&d.name.as_str()))
+            .collect()
+        };
+
+        result.push(Entity {
+          of: entity.of,
+          data: filtered_data,
+        });
+      }
+    }
+
+    Ok(result)
+  }
+
+  pub fn delete(&mut self, table_name: &str, conditions: Vec<Condition>) -> Result<usize, String> {
+    let table = match self.get_table(table_name) {
+      Some(t) => t,
+      None => return Err(format!("Table with name '{}' doesn't exists", table_name)),
+    };
+
+    let mut columns = Vec::new();
+    for attr in &table.attrs {
+      columns.push(self.load_column(&table, attr)?);
+    }
+
+    if columns.is_empty() {
+      return Ok(0);
+    }
+
+    let row_count = columns[0].len();
+
+    // The columns that is going to rewrite the db
+    let mut new_columns: Vec<Vec<Value>> = vec![Vec::new(); columns.len()];
+    let mut deleted = 0;
+
+    for row in 0..row_count {
+      let entity = self.build_entity(&table, &columns, row);
+
+      let matches = conditions.iter().all(|c| self.match_condition(&entity, c));
+
+      if matches {
+        deleted += 1;
+        continue;
+      }
+
+      // Add only the columns that donot match
+      for col in 0..columns.len() {
+        new_columns[col].push(columns[col][row].clone());
+      }
+    }
+
+    // Write the new column
+    for (idx, attr) in table.attrs.iter().enumerate() {
+      self.write_column(&table, attr, &new_columns[idx])?;
+    }
+
+    Ok(deleted)
+  }
+
+  pub fn update(
+    &mut self,
+    table_name: &str,
+    updates: Vec<Data>,
+    conditions: Vec<Condition>,
+  ) -> Result<usize, String> {
+    let table = match self.get_table(table_name) {
+      Some(t) => t,
+      None => return Err(format!("Table with name '{}' doesn't exists", table_name)),
+    };
+
+    let mut columns = Vec::new();
+    for attr in &table.attrs {
+      columns.push(self.load_column(&table, attr)?);
+    }
+
+    if columns.is_empty() {
+      return Ok(0);
+    }
+
+    let row_count = columns[0].len();
+    let mut updated = 0;
+    for row in 0..row_count {
+      let entity = self.build_entity(&table, &columns, row);
+      let matches = conditions.iter().all(|c| self.match_condition(&entity, c));
+
+      if !matches {
+        continue;
+      }
+
+      updated += 1;
+      for update in &updates {
+        // Calculate the index of the column
+        let col_idx = table
+          .attrs
+          .iter()
+          .position(|a| a.name == update.name)
+          .ok_or_else(|| format!("Unknown attribute '{}'", update.name))?;
+
+        // Override the column data
+        columns[col_idx][row] = update.value.clone();
+      }
+    }
+
+    // Write the columns again
+    for (idx, attr) in table.attrs.iter().enumerate() {
+      self.write_column(&table, attr, &columns[idx])?;
+    }
+
+    Ok(updated)
+  }
+}
