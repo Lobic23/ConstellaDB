@@ -7,7 +7,7 @@ members = [
   "src/modules/server_module",
   "src/modules/job_scheduler",
   "src/services/job_service",
-  "src/node",
+  "src/node", "src/services/db_service",
 ]
 
 [package]

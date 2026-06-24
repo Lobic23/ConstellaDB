@@ -1,0 +1,17 @@
+[
+  {
+    "name": "users",
+    "attrs": [
+      {
+        "name": "id",
+        "data_type": "Int"
+      },
+      {
+        "name": "name",
+        "data_type": {
+          "VarChar": 255
+        }
+      }
+    ]
+  }
+]
