@@ -22,6 +22,9 @@ fn get_local_ip() -> std::io::Result<std::net::IpAddr> {
 #[derive(Parser, Debug)]
 struct Args {
   #[arg(short, long)]
+  port: Option<u32>,
+
+  #[arg(short, long)]
   leader: bool,
 
   #[arg(short, long, num_args=1..)]
@@ -294,14 +297,14 @@ async fn connection_listener(
   }
 }
 
-async fn start_listener(node: Arc<Mutex<Node>>) {
+async fn start_listener(node: Arc<Mutex<Node>>, port: u32) {
   let ip = get_local_ip().unwrap();
   let listener = TcpListener::bind(
-    format!("{}:0", ip)
+    format!("{}:{}", ip, port)
   ).await.unwrap();
 
-  let port = listener.local_addr().unwrap().port();
-  let full_ip = format!("{}:{}", ip, port);
+  let bound_port = listener.local_addr().unwrap().port();
+  let full_ip = format!("{}:{}", ip, bound_port);
   {
     let mut n = node.lock().await;
     n.id = full_ip.clone();
@@ -333,8 +336,14 @@ async fn main() {
   let node = Arc::new(Mutex::new(Node::new()));
 
   let args = Args::parse();
-  if args.leader {
 
+  // Extract port from args
+  let mut port = 0;
+  if let Some(p) = args.port {
+    port = p;
+  }
+
+  if args.leader {
     {
       let mut n = node.lock().await;
       n.leader = true;
@@ -352,5 +361,5 @@ async fn main() {
   let job_service_ip = args.job_service;
   connect_to_job_service(node.clone(), &job_service_ip).await;
 
-  start_listener(node).await;
+  start_listener(node, port).await;
 }
