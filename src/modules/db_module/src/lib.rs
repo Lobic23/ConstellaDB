@@ -395,6 +395,10 @@ impl Engine {
     Ok(updated)
   }
 
+  pub fn get_tables(&self) -> Vec<Table> {
+    self.tables.clone()
+  }
+
   //==============================
   // DATABASE MODULE PRIVATE API'S
   //==============================
