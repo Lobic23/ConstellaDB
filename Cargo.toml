@@ -24,6 +24,9 @@ db_module = { path = "src/modules/db_module" }
 network_module = { path = "src/modules/network_module" }
 server_module = { path = "src/modules/server_module" }
 
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tower-http = { version = "0.5", features = ["cors"] }
 clap = { version = "4.6.1", features = ["derive"] }
 uuid = { version = "1.23.3", features = ["v4"] }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -31,3 +34,5 @@ serde_json = "1.0.150"
 tokio = { version = "1", features = ["full"] }
 bincode = "1"
 axum = "0.8.9"
+sqlparser = "0.45"
+thiserror = "1"
