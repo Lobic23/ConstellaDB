@@ -5,6 +5,8 @@ use clap::Parser;
 use std::thread;
 use std::sync::Arc;
 use std::collections::VecDeque;
+use serde_json::json;
+use reqwest::Client;
 
 use protocol_module::{
   handler::{ReadHandler, WriteHandler},
@@ -20,6 +22,9 @@ struct Args {
 
   #[arg(short, long)]
   threads: Option<usize>,
+
+  #[arg(short, long)]
+  query_service: String,
 }
 
 /// Job thats going to be processed
@@ -33,7 +38,8 @@ struct Job {
 struct ServiceState {
   pub ip: String,
   pub max_threads: usize,
-  pub job_queue: Arc<Mutex<VecDeque<Job>>>
+  pub job_queue: Arc<Mutex<VecDeque<Job>>>,
+  pub query_service_ip: String,
 }
 
 impl ServiceState {
@@ -46,6 +52,7 @@ impl ServiceState {
       ip: "".to_string(),
       max_threads: max_thread_count,
       job_queue: Arc::new(Mutex::new(VecDeque::new())),
+      query_service_ip: "".to_string(),
     }
   }
 }
@@ -59,19 +66,35 @@ fn get_local_ip() -> std::io::Result<std::net::IpAddr> {
 
 /// Job processor which calls to the query service
 /// and returns the response to the job owner via tcp stream
-async fn process_job(job: Job) {
-  // TODO(slok): Connect to the query service.
-  tokio::time::sleep(
-    std::time::Duration::from_secs(1)
-  ).await;
+async fn process_job(job: Job, state: Arc<Mutex<ServiceState>>) {
+  // Extract the query
+  let query = String::from_utf8(job.msg.payload).unwrap();
+  println!("[LOG] Request: {}", &query);
 
+  // Send the query to the query service
+  let s = state.lock().await;
+  let client = Client::new();
+  let response = client
+    .post(format!("http://{}/query", s.query_service_ip))
+    .json(&json!({
+      "query": query
+    }))
+    .send()
+    .await
+    .unwrap();
+
+  // Get the response from query service
+  let response_text = response.text().await.unwrap();
+  println!("[LOG] Response: {}", &response_text);
+
+  // Send the response back to the node
   let mut handler = job.job_owner_write_handler.lock().await;
   let response = Message::new(
     0,
     MessageType::JobComplete { job_id: job.id },
     "".to_string()
   )
-    .with_payload("This is a dummy response".to_string().into_bytes());
+    .with_payload(response_text.into_bytes());
   handler.send(&response).await.unwrap();
 }
 
@@ -88,7 +111,7 @@ async fn worker(state: Arc<Mutex<ServiceState>>) {
 
     match job {
       Some(job) => {
-        process_job(job).await;
+        process_job(job, state.clone()).await;
       }
       None => {
         // Wait for 10ms if job queue is empty
@@ -219,6 +242,13 @@ async fn main() {
       return;
     }
     s.max_threads = t;
+  }
+
+  // Saving the query service ip
+  {
+    let query_service_ip = args.query_service;
+    let mut s = state.lock().await;
+    s.query_service_ip = query_service_ip;
   }
 
   start_listener(state, port).await;
