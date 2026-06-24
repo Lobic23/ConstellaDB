@@ -1,0 +1,119 @@
+use serde::{Deserialize, Serialize};
+use std::fmt;
+
+pub const DB_DIR: &str = "DB";
+pub const SCHEMA_FILE: &str = "schemas.json";
+
+pub enum Operator {
+  Eq, // ==
+  Ne, // !=
+  Lt, // <
+  Le, // <=
+  Gt, // >
+  Ge, // >=
+}
+
+pub enum Condition {
+  Compare {
+    attr: String,
+    value: Value,
+    op: Operator,
+  },
+  And(Box<Condition>, Box<Condition>),
+  Or(Box<Condition>, Box<Condition>),
+}
+
+//=======
+// Table
+//=======
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Type {
+  Int,
+  VarChar(usize),
+}
+
+impl fmt::Display for Type {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Type::Int => write!(f, "INT"),
+      Type::VarChar(size) => write!(f, "VARCHAR({})", size),
+    }
+  }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Attr {
+  pub name: String,
+  pub data_type: Type,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Table {
+  pub name: String,
+  pub attrs: Vec<Attr>,
+}
+
+impl Table {
+  pub fn attr_exists(&self, attr_name: &str) -> bool {
+    for attr in &self.attrs {
+      if attr_name == attr.name {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+//=========
+// Entity
+//=========
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+  Int(i32),
+  VarChar(String),
+}
+impl Value {
+    pub fn cast_to(self, target: &Type) -> Result<Value, String> {
+        match (self, target) {
+            // Same types
+            (Value::Int(v), Type::Int) => Ok(Value::Int(v)),
+            (Value::VarChar(s), Type::VarChar(_)) => Ok(Value::VarChar(s)),
+
+            // Int -> VarChar
+            (Value::Int(v), Type::VarChar(_)) => {
+                Ok(Value::VarChar(v.to_string()))
+            }
+
+            // VarChar -> Int
+            (Value::VarChar(s), Type::Int) => {
+                s.trim()
+                    .parse::<i32>()
+                    .map(Value::Int)
+                    .map_err(|_| format!("Cannot cast '{}' to INT", s))
+            }
+        }
+    }
+}
+
+impl fmt::Display for Value {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Value::Int(_) => write!(f, "INT"),
+      Value::VarChar(_) => write!(f, "VARCHAR"),
+    }
+  }
+}
+
+#[derive(Debug)]
+pub struct Data {
+  pub name: String,
+  pub value: Value,
+}
+
+#[derive(Debug)]
+pub struct Entity {
+  pub of: String,
+  pub data: Vec<Data>,
+}
