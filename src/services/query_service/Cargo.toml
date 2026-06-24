@@ -13,3 +13,4 @@ axum.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+clap.workspace = true

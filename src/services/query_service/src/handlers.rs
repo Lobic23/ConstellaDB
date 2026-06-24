@@ -1,7 +1,8 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use cmd_module::{execute, parse_cmd, CmdError};
+use cmd_module::{ExecuteResult, execute, parse_cmd, CmdError};
+use db_module::Entity;
 use super::state::AppState;
 
 #[derive(Deserialize)]
@@ -12,7 +13,8 @@ pub struct QueryRequest {
 #[derive(Serialize)]
 pub struct QueryResponse {
     pub success: bool,
-    pub message: String,
+    pub message: Option<String>,
+    pub rows: Option<Vec<Entity>>,
 }
 
 pub async fn handle_query(
@@ -24,7 +26,8 @@ pub async fn handle_query(
         Err(e) => {
             return (error_status(&e), Json(QueryResponse {
                 success: false,
-                message: e.to_string(),
+                message: Some(e.to_string()),
+                rows: None,
             }));
         }
     };
@@ -34,9 +37,34 @@ pub async fn handle_query(
         execute(&mut engine, cmd)
     };
 
-    let success = result.starts_with("OK");
-    let status = if success { StatusCode::OK } else { StatusCode::BAD_REQUEST };
-    (status, Json(QueryResponse { success, message: result }))
+    match result {
+        ExecuteResult::Ok(msg) => (
+            StatusCode::OK,
+            Json(QueryResponse {
+                success: true,
+                message: Some(msg),
+                rows: None,
+            }),
+        ),
+
+        ExecuteResult::Error(msg) => (
+            StatusCode::BAD_REQUEST,
+            Json(QueryResponse {
+                success: false,
+                message: Some(msg),
+                rows: None,
+            }),
+        ),
+
+        ExecuteResult::Rows(rows) => (
+            StatusCode::OK,
+            Json(QueryResponse {
+                success: true,
+                message: None,
+                rows: Some(rows),
+            }),
+        ),
+    }
 }
 
 pub async fn handle_health() -> impl IntoResponse {

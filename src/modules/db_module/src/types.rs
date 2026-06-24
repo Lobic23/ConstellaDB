@@ -69,7 +69,7 @@ impl Table {
 // Entity
 //=========
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub enum Value {
   Int(i32),
   VarChar(String),
@@ -106,13 +106,13 @@ impl fmt::Display for Value {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Data {
   pub name: String,
   pub value: Value,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Entity {
   pub of: String,
   pub data: Vec<Data>,

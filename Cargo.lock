@@ -192,6 +192,8 @@ name = "cmd_module"
 version = "0.1.0"
 dependencies = [
  "db_module",
+ "serde",
+ "serde_json",
  "sqlparser",
  "thiserror",
 ]
@@ -585,6 +587,7 @@ name = "query_service"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "clap",
  "cmd_module",
  "db_module",
  "serde",
