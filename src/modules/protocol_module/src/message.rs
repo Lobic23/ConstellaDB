@@ -3,11 +3,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MessageType {
-  Query,     // Request to execute database query
-  Response,  // Reply to query
-  Heartbeat, // Alive singal between nodes
-  Sync,      // Data synchronization between nodes
-  Error,     // Error notification
+  Query,       // Request to execute database query
+  Response,    // Reply to query
+  Heartbeat,   // Alive singal between nodes
+  Sync,        // Data synchronization between nodes
+  Error,       // Error notification
+  JobInit     { job_id: String }, // New Job Initialized
+  JobComplete { job_id: String }, // Job is completed
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

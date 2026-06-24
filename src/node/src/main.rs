@@ -26,12 +26,14 @@ struct Args {
 
   #[arg(short, long, num_args=1..)]
   followers: Option<Vec<String>>,       // IP's of the followers
+
+  #[arg(short, long)]
+  job_service: String,
 }
 
 /// Ran when node is a leader
 /// Connects to the follower's server as a client and stores the stream
 async fn connect_to_followers(node: Arc<Mutex<Node>>, ips: Vec<String>) {
-
   for follower_ip in ips {
     let stream = TcpStream::connect(&follower_ip).await.unwrap();
     let (reader, writer) = stream.into_split();
@@ -56,6 +58,29 @@ async fn connect_to_followers(node: Arc<Mutex<Node>>, ips: Vec<String>) {
       connection_listener(read_handler, write_handler, x).await;
     });
   }
+}
+
+/// Connects to the job scheduling service and runs the listener for
+/// the job service responses
+async fn connect_to_job_service(node: Arc<Mutex<Node>>, job_service_ip: &str) {
+  let stream = TcpStream::connect(job_service_ip).await.unwrap();
+  let (reader, writer) = stream.into_split();
+  let read_handler = Arc::new(Mutex::new(
+    ReadHandler::new(reader, Box::new(BincodeSerializer))
+  ));
+  let write_handler = Arc::new(Mutex::new(
+    WriteHandler::new(writer, Box::new(BincodeSerializer))
+  ));
+  {
+    let mut n = node.lock().await;
+    n.job_service = Some((read_handler.clone(), write_handler.clone()));
+  }
+
+  // Spawn the listener for the job service
+  let x = node.clone();
+  tokio::spawn(async move {
+    connection_listener(read_handler, write_handler, x).await;
+  });
 }
 
 /// Distribute the message to the followers
@@ -163,26 +188,12 @@ async fn connection_listener(
           create_new_instruction(&msg, node.clone(), write_handler_mutex.clone()).await;
           distribute_message(&msg, node.clone()).await;
         } else {
-          // If the node is the follower DO THE TASK HERE
-          // TODO(slok): Here the job schedular microservice will be called
-          let sql = match String::from_utf8(msg.payload) {
-            Ok(s) => s,
-            Err(_) => {
-              println!("[LOG] invalid UTF-8 payload");
-              continue;
-            }
-          };
-          println!("{}: {}", msg.id, sql);
-
+          // If the node is the follower, send the task to the job service
           let n = node.lock().await;
-          let response = Message::new(
-            msg.id,
-            MessageType::Response,
-            n.id.clone()
-          );
-          println!("sent: {:#?}", response);
-          let mut handler = write_handler_mutex.lock().await;
-          handler.send(&response).await.unwrap();
+          if let Some((_, write_handler_mutex)) = &n.job_service {
+            let mut handler = write_handler_mutex.lock().await;
+            handler.send(&msg).await.unwrap();
+          }
         }
       },
       MessageType::Response => {
@@ -217,9 +228,22 @@ async fn connection_listener(
           }
         }
       },
-      MessageType::Heartbeat => { },
-      MessageType::Sync => { },
-      MessageType::Error => { },
+      MessageType::JobInit { job_id } => {
+        // Save the job in the job table when a new job has been initialized
+        // by the job service
+
+        let inst_id = msg.id;
+        let job_id = job_id;
+
+        let mut n = node.lock().await;
+        n.job_table.insert(job_id.clone(), inst_id);
+
+        println!("[LOG] Initialized new job [{} -> {}]", job_id, inst_id);
+      },
+      MessageType::JobComplete { job_id } => {
+        println!("[LOG] Job {} is completed", job_id);
+      }
+      _ => {println!("wtf");},
     }
   }
 }
@@ -277,6 +301,10 @@ async fn main() {
       return;
     }
   }
+
+  // Connecting to the job service
+  let job_service_ip = args.job_service;
+  connect_to_job_service(node.clone(), &job_service_ip).await;
 
   start_listener(node).await;
 }

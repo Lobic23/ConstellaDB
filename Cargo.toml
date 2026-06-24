@@ -15,18 +15,17 @@ name = "ConstellaDB"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[workspace.dependencies]
+protocol_module = { path = "src/modules/protocol_module" }
 cmd_module = { path = "src/modules/cmd_module" }
 db_module = { path = "src/modules/db_module" }
 network_module = { path = "src/modules/network_module" }
-protocol_module = { path = "src/modules/protocol_module" }
 server_module = { path = "src/modules/server_module" }
 
-
-[workspace.dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
 uuid = { version = "1.23.3", features = ["v4"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 tokio = { version = "1", features = ["full"] }
 bincode = "1"
+axum = "0.8.9"
