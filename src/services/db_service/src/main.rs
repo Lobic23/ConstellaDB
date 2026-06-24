@@ -6,6 +6,8 @@ use axum::{
 };
 
 use serde::Deserialize;
+use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 
 use std::sync::{Arc, Mutex};
 
@@ -27,22 +29,22 @@ struct AppState {
 }
 
 #[derive(Deserialize)]
-struct CreateTableRequest {
+struct CreateAttrRequest {
     name: String,
+    data_type: String,
 }
 
 #[derive(Deserialize)]
-struct InsertRequest {
-    id: i32,
+struct CreateTableRequest {
     name: String,
+    attrs: Vec<CreateAttrRequest>,
 }
 
 #[derive(Deserialize)]
 struct UpdateRequest {
-    id: i32,
-    name: String,
+    conditions: HashMap<String, JsonValue>,
+    updates: HashMap<String, JsonValue>,
 }
-
 
 async fn health() -> &'static str {
     "DB Service Running"
@@ -54,18 +56,25 @@ async fn create_table(
 ) -> String {
     let mut engine = state.engine.lock().unwrap();
 
+    let attrs: Vec<Attr> = req
+        .attrs.into_iter()
+        .map(|a| {
+            let data_type = match a.data_type.to_uppercase().as_str() {
+                "INT" => Type::Int,
+                "STRING" => Type::VarChar(255),
+                _ => Type::VarChar(255),
+            };
+
+            Attr {
+                name: a.name,
+                data_type,
+            }
+        })
+        .collect();
+
     let table = Table {
         name: req.name,
-        attrs: vec![
-            Attr {
-                name: "id".to_string(),
-                data_type: Type::Int,
-            },
-            Attr {
-                name: "name".to_string(),
-                data_type: Type::VarChar(255),
-            },
-        ],
+        attrs,
     };
 
     match engine.create_table(&table) {
@@ -97,23 +106,28 @@ async fn drop_table(
 async fn insert_row(
     Path(table_name): Path<String>,
     State(state): State<AppState>,
-    Json(req): Json<InsertRequest>,
+    Json(payload): Json<HashMap<String,JsonValue>>,
 ) -> String {
-    let mut engine = state.engine.lock().unwrap();
+    let mut data = Vec::new();
+
+    for (name,value) in payload {
+        let value = match json_to_db_value(value) {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+
+        data.push(Data { 
+            name, 
+            value 
+        });  
+    }
 
     let entity = Entity {
         of: table_name,
-        data: vec![
-            Data {
-                name: "id".to_string(),
-                value: Value::Int(req.id),
-            },
-            Data {
-                name: "name".to_string(),
-                value: Value::VarChar(req.name),
-            },
-        ],
+        data,
     };
+
+    let mut engine = state.engine.lock().unwrap();
 
     match engine.insert(&entity) {
         Ok(_) => "Row inserted".to_string(),
@@ -142,22 +156,38 @@ async fn update_row(
     State(state): State<AppState>,
     Json(req): Json<UpdateRequest>,
 ) -> String {
+    let mut updates = Vec::new();
+    
+    for (name, value) in req.updates {
+        let value = match json_to_db_value(value) {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+
+        updates.push(Data {
+            name,
+            value,
+        });
+    }
+
+    let mut conditions = Vec::new();
+
+    for (attr, value) in req.conditions {
+        let value = match json_to_db_value(value) {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+
+        conditions.push(
+            Condition::Compare {
+                attr,
+                value,
+                op: Operator::Eq,
+            }
+        );
+    }
+
     let mut engine = state.engine.lock().unwrap();
-
-    let updates = vec![
-        Data {
-            name: "name".to_string(),
-            value: Value::VarChar(req.name),
-        }
-    ];
-
-    let conditions = vec! [
-        Condition::Compare {
-            attr: "id".to_string(),
-            value: Value::Int(req.id),
-            op: Operator::Eq,
-        }
-    ];
 
     match engine.update(
         &table_name,
@@ -170,22 +200,50 @@ async fn update_row(
 }
 
 async fn delete_row(
-    Path((table_name, id)): Path<(String, i32)>,
+    Path(table_name): Path<String>,
     State(state): State<AppState>,
+    Json(payload): Json<HashMap<String, JsonValue>>,
 ) -> String {
-    let mut engine = state.engine.lock().unwrap();
+    let mut conditions = Vec::new();
 
-    let conditions = vec![
-        Condition::Compare {
-            attr: "id".to_string(),
-            value: Value::Int(id),
-            op: Operator::Eq,
-        }
-    ];
+    for (attr, value) in payload {
+        let value = match json_to_db_value(value) {
+            Ok(v) => v,
+            Err(e) => return e,
+        };
+
+        conditions.push(
+            Condition::Compare {
+                attr,
+                value,
+                op: Operator::Eq,
+            }
+        );
+    }
+
+    let mut engine = state.engine.lock().unwrap();
 
     match engine.delete(&table_name, conditions) {
         Ok(count) => format!("{} row(s) deleted", count),
         Err(e) => e,
+    }
+}
+
+fn json_to_db_value(value: JsonValue) -> Result<Value, String> {
+    match value {
+        JsonValue::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Ok(Value::Int(i as i32))
+            } else {
+                Err("Invalid integer".to_string())
+            }
+        }
+
+        JsonValue::String(s) => {
+            Ok(Value::VarChar(s))
+        }
+
+        _ => Err("Unsupprted data formats".to_string()),
     }
 }
 
@@ -203,11 +261,8 @@ async fn main() {
             "/tables/{name}/rows", 
             get(select_rows)
                 .post(insert_row)
-                .put(update_row),
-        )
-        .route(
-            "/tables/{name}/rows/{id}",
-            delete(delete_row),
+                .put(update_row)
+                .delete(delete_row),
         )
         .with_state(state);
 
@@ -221,3 +276,4 @@ async fn main() {
         .await
         .unwrap();
 }
+
