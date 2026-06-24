@@ -107,6 +107,11 @@ async fn distribute_message(msg: &Message, node: Arc<Mutex<Node>>) {
       s.push(NodeStatus { id: ip, status: false });
     }
   }
+
+  if let Some((status, _)) = instructions.get(&msg.id) {
+    let s = status.lock().await;
+    println!("[LOG] Instruction {} distributed to: {:?}", msg.id, s);
+  }
 }
 
 /// Allocates a new instruction in the leader's node
@@ -120,6 +125,7 @@ async fn create_new_instruction(
     msg.id,
     (Arc::new(Mutex::new(Vec::new())), write_handler)
   );
+  println!("[LOG] New instruction created: {}", msg.id);
 }
 
 /// Makes the status to true for node who has completed the task
@@ -134,6 +140,7 @@ async fn sucess_instruction_response(
     for node in ns.iter_mut() {
       if node.id == node_id {
         node.status = true;
+        println!("[LOG] Instruction {} completed by: {:?}", inst_id, node);
       }
     }
   }
@@ -173,7 +180,13 @@ async fn connection_listener(
     }
 
     let msg = received.unwrap();
-    match msg.msg_type {
+    match &msg.msg_type {
+
+      // Handles the execution of the instruction
+      // If the node is the leader, the query will be distributed
+      // among followers.
+      // If the node is the follower then the query will be sent to
+      // the job service for execution
       MessageType::Query => {
 
         // Extracting the is_leader so that lock is dropped here
@@ -188,29 +201,42 @@ async fn connection_listener(
           create_new_instruction(&msg, node.clone(), write_handler_mutex.clone()).await;
           distribute_message(&msg, node.clone()).await;
         } else {
+          let mut n = node.lock().await;
+          // Store the instruction owner's write handler
+          n.instruction_owners.insert(msg.id, write_handler_mutex.clone());
+
           // If the node is the follower, send the task to the job service
-          let n = node.lock().await;
           if let Some((_, write_handler_mutex)) = &n.job_service {
             let mut handler = write_handler_mutex.lock().await;
             handler.send(&msg).await.unwrap();
           }
         }
       },
-      MessageType::Response => {
-        println!("{:#?}", msg);
 
-        let n = node.lock().await;
+      // Handles the response sent by the followers to the leader
+      MessageType::Response => {
+        let is_leader = {
+          let n = node.lock().await;
+          n.leader
+        };
+        println!("[LOG] Received Response:\n{:#?}", msg);
 
         // If the node is the leader then the response would be the result
         // back from the followers, so the data is collected here and checked
         // if the instruction is complete and if so then the response is sent
         // to the client
-        if n.leader {
+        if is_leader {
           sucess_instruction_response(msg.id, &msg.node_id, node.clone()).await;
+
+          // TODO(slok): Save the response
 
           // The instruction is completed
           if is_instruction_finished(msg.id, node.clone()).await {
+            let n = node.lock().await;
+
             println!("[LOG] Instruction {} completed", msg.id);
+
+            // TODO(slok): Prepare proper response
 
             // Sending the response to client
             if let Some((_, client_write_handler)) = n.instructions.get(&msg.id) {
@@ -228,10 +254,10 @@ async fn connection_listener(
           }
         }
       },
-      MessageType::JobInit { job_id } => {
-        // Save the job in the job table when a new job has been initialized
-        // by the job service
 
+      // Save the job in the job table when a new job has been initialized
+      // by the job service
+      MessageType::JobInit { job_id } => {
         let inst_id = msg.id;
         let job_id = job_id;
 
@@ -240,7 +266,27 @@ async fn connection_listener(
 
         println!("[LOG] Initialized new job [{} -> {}]", job_id, inst_id);
       },
+
+      // When job is completed, follower will send the result from the job
+      // service to the leader as a response
       MessageType::JobComplete { job_id } => {
+        let n = node.lock().await;
+
+        if let Some(inst_id) = n.job_table.get(job_id) {
+          if let Some(owner_write_handler) = n.instruction_owners.get(inst_id) {
+            let mut handler = owner_write_handler.lock().await;
+
+            // Sending the response to the leader
+            let response = Message::new(
+              *inst_id,
+              MessageType::Response,
+              n.id.clone()
+            )
+              .with_payload(msg.payload.clone());
+            handler.send(&response).await.unwrap();
+          }
+        }
+
         println!("[LOG] Job {} is completed", job_id);
       }
       _ => {println!("wtf");},
