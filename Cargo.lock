@@ -1442,6 +1442,7 @@ dependencies = [
  "db_module",
  "protocol_module",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

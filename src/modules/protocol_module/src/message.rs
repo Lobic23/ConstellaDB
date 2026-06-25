@@ -24,7 +24,7 @@ pub enum Command {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
-  pub id: u64,
+  pub id: String,
   pub msg_type: MessageType,
   pub command: Option<Command>,
   pub payload: Vec<u8>,
@@ -33,7 +33,7 @@ pub struct Message {
 }
 
 impl Message {
-  pub fn new(id: u64, msg_type: MessageType, node_id: String) -> Self {
+  pub fn new(id: String, msg_type: MessageType, node_id: String) -> Self {
     let timestamp = SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .unwrap()

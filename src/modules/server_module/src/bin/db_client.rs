@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use protocol_module::handler::ProtocolHandler;
 use protocol_module::message::{Message, MessageType};
 use protocol_module::serializer::BincodeSerializer;
@@ -19,7 +20,6 @@ async fn main() {
   println!("[db_client] type SQL and press Enter. Ctrl+C to quit.\n");
 
   let mut handler = ProtocolHandler::new(stream, Box::new(BincodeSerializer));
-  let mut next_id: u64 = 0;
   let stdin = io::stdin();
 
   loop {
@@ -41,9 +41,9 @@ async fn main() {
       continue;
     }
 
-    let msg = Message::new(next_id, MessageType::Query, node_id.clone())
+    let msg_id = Uuid::new_v4().to_string();
+    let msg = Message::new(msg_id, MessageType::Query, node_id.clone())
       .with_payload(sql.as_bytes().to_vec());
-    next_id += 1;
 
     if let Err(e) = handler.send(&msg).await {
       eprintln!("send error: {e}");
