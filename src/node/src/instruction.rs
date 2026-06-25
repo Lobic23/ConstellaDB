@@ -8,7 +8,7 @@ use db_module::Entity;
 use crate::node::Node;
 
 
-// TODO(slok): Convert instruction id from u64 to String (uuid)
+/// Status of the worker node which determines the work is done or not
 #[derive(Debug)]
 pub struct NodeStatus {
   pub id: String,
@@ -19,8 +19,8 @@ pub struct NodeStatus {
 #[derive(Clone)]
 pub struct Instruction {
   pub id: String,
-  pub nodes_status: Arc<Mutex<Vec<NodeStatus>>>,
-  pub client_write_handler: Arc<Mutex<WriteHandler>>,
+  pub nodes_status: Arc<Mutex<Vec<NodeStatus>>>,       // Stores array of status of worker nodes
+  pub client_write_handler: Arc<Mutex<WriteHandler>>,  // Writer stream of the client who requested this instruction
 
   pub response_message: Option<String>,
   pub response_rows: Option<Vec<Entity>>,
