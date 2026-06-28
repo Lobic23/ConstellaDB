@@ -32,7 +32,7 @@ impl Engine {
   pub fn get_tables(&self) -> Vec<Table> {
     self.tables.clone()
   }
-  
+
   pub(crate) fn save_schema(&self) {
     let file = File::create(PathBuf::from(DB_DIR).join(SCHEMA_FILE).to_str().unwrap()).unwrap();
 
@@ -89,6 +89,7 @@ impl Engine {
 
       // Typechecking the attributes
       match (&attr.data_type, &data.value) {
+        (_, Value::Null) => {}
         (Type::Int, Value::Int(_)) => {}
         (Type::VarChar(_), Value::VarChar(_)) => {}
         _ => {
@@ -112,49 +113,52 @@ impl Engine {
 
   pub(crate) fn load_column(&self, table: &Table, attr: &Attr) -> Result<Vec<Value>, String> {
     if !self.table_exists(&table.name) {
-      return Err(format!("Table with name '{}' doesn't exists", table.name));
+      return Err(format!("Table with name '{}' doesn't exist", table.name));
     }
 
     if !table.attr_exists(&attr.name) {
       return Err(format!(
-        "Attribute '{}' doesn't exists in table {}",
+        "Attribute '{}' doesn't exist in table {}",
         attr.name, table.name
       ));
     }
 
-    // Open the attribute file
     let path = PathBuf::from(DB_DIR)
       .join(&table.name)
       .join(format!("{}.col", &attr.name));
 
     let mut file = File::open(path).map_err(|e| e.to_string())?;
-
-    // Final value array
     let mut values: Vec<Value> = Vec::new();
+    let mut flag = [0u8; 1];
 
     match attr.data_type {
       Type::Int => {
-        // Buffer size should be 4
         let mut buff = [0u8; 4];
-
-        while file.read_exact(&mut buff).is_ok() {
-          values.push(Value::Int(i32::from_le_bytes(buff)));
+        while file.read_exact(&mut flag).is_ok() {
+          file.read_exact(&mut buff).map_err(|e| e.to_string())?;
+          values.push(if flag[0] == 0 {
+            Value::Null
+          } else {
+            Value::Int(i32::from_le_bytes(buff))
+          });
         }
       }
 
       Type::VarChar(size) => {
-        // Buffer size should be size of the varchar size
         let mut buff = vec![0u8; size];
-
-        while file.read_exact(&mut buff).is_ok() {
-          let s = String::from_utf8_lossy(&buff)
-            .trim_end_matches('\0')
-            .to_string();
-
-          values.push(Value::VarChar(s));
+        while file.read_exact(&mut flag).is_ok() {
+          file.read_exact(&mut buff).map_err(|e| e.to_string())?;
+          values.push(if flag[0] == 0 {
+            Value::Null
+          } else {
+            let s = String::from_utf8_lossy(&buff)
+              .trim_end_matches('\0')
+              .to_string();
+            Value::VarChar(s)
+          });
         }
       }
-    };
+    }
 
     Ok(values)
   }
@@ -176,23 +180,32 @@ impl Engine {
       .map_err(|e| e.to_string())?;
 
     for value in values {
+      if value == &Value::Null {
+        let payload_size = match &attr.data_type {
+          Type::Int => 4,
+          Type::VarChar(size) => *size,
+        };
+        file.write_all(&[0u8]).map_err(|e| e.to_string())?;
+        file
+          .write_all(&vec![0u8; payload_size])
+          .map_err(|e| e.to_string())?;
+        continue;
+      }
+
       match (&attr.data_type, value) {
         (Type::Int, Value::Int(v)) => {
+          file.write_all(&[1u8]).map_err(|e| e.to_string())?;
           file
             .write_all(&v.to_le_bytes())
             .map_err(|e| e.to_string())?;
         }
-
         (Type::VarChar(size), Value::VarChar(v)) => {
+          file.write_all(&[1u8]).map_err(|e| e.to_string())?;
           let mut bytes = v.as_bytes().to_vec();
           bytes.resize(*size, 0);
-
           file.write_all(&bytes).map_err(|e| e.to_string())?;
         }
-
-        _ => {
-          return Err("Type mismatch while writing column".into());
-        }
+        _ => return Err("Type mismatch while writing column".into()),
       }
     }
 
@@ -208,6 +221,7 @@ impl Engine {
         };
 
         match (&data.value, value, op) {
+          (Value::Null, _, _) | (_, Value::Null, _) => false,
           (Value::Int(a), Value::Int(b), Operator::Eq) => a == b,
           (Value::Int(a), Value::Int(b), Operator::Ne) => a != b,
           (Value::Int(a), Value::Int(b), Operator::Gt) => a > b,

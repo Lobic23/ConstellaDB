@@ -2,15 +2,15 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::core::Engine;
+use crate::engine::Engine;
 use crate::types::{Condition, DB_DIR, Data, Entity, Type, Value};
 
 impl Engine {
   pub fn insert(&mut self, entity: &Entity) -> Result<(), String> {
     let table = self
-    .get_table(&entity.of)
-    .ok_or_else(|| format!("Table '{}' doesn't exist", entity.of))?
-    .clone();
+      .get_table(&entity.of)
+      .ok_or_else(|| format!("Table '{}' doesn't exist", entity.of))?
+      .clone();
 
     // Validate the data attributes
     self.validate_entity_data(&table, entity)?;
@@ -29,24 +29,32 @@ impl Engine {
         .unwrap();
 
       // Store the byte
+      // NULL is stored as a 0x00 flag byte followed by zero-filled payload bytes to maintain fixed record size.
+      // Non-NULL values are stored as a 0x01 flag byte followed by the value encoded in little-endian bytes.
       match (&attr.data_type, &data.value) {
+        (_, Value::Null) => {
+          let payload_size = match &attr.data_type {
+            Type::Int => 4,
+            Type::VarChar(size) => *size,
+          };
+          file.write_all(&[0u8]).map_err(|e| e.to_string())?;
+          file
+            .write_all(&vec![0u8; payload_size])
+            .map_err(|e| e.to_string())?;
+        }
         (Type::Int, Value::Int(v)) => {
+          file.write_all(&[1u8]).map_err(|e| e.to_string())?;
           file
             .write_all(&v.to_le_bytes())
             .map_err(|e| e.to_string())?;
         }
-
         (Type::VarChar(size), Value::VarChar(v)) => {
-          // Resizing to the varchar size
+          file.write_all(&[1u8]).map_err(|e| e.to_string())?;
           let mut bytes = v.as_bytes().to_vec();
           bytes.resize(*size, 0);
-
           file.write_all(&bytes).map_err(|e| e.to_string())?;
         }
-
-        _ => {
-          return Err("Unreachable!".to_string());
-        }
+        _ => return Err("Unreachable!".to_string()),
       }
     }
 

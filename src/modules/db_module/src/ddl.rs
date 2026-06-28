@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::path::PathBuf;
 
-use crate::core::Engine;
+use crate::engine::Engine;
 use crate::types::{Attr, DB_DIR, Table, Type, Value};
 
 pub enum AlterOp {
@@ -38,13 +38,12 @@ impl Engine {
     Ok(())
   }
 
-
   pub fn list_tables(&self) -> Result<Vec<String>, String> {
     if self.tables.is_empty() {
-        return Err("No tables exist".to_string());
+      return Err("No tables exist".to_string());
     }
     Ok(self.tables.iter().map(|table| table.name.clone()).collect())
-}
+  }
 
   pub fn drop_table(&mut self, table_name: &str) -> Result<(), String> {
     if !self.table_exists(table_name) {
@@ -53,8 +52,7 @@ impl Engine {
 
     // Remove from the filesystem
     let path = PathBuf::from(DB_DIR).join(table_name);
-
-    let _ = fs::remove_dir_all(path).map_err(|e| e.to_string());
+    fs::remove_dir_all(path).map_err(|e| e.to_string())?;
 
     // Remove from schema
     self.tables.retain(|t| t.name != table_name);
@@ -87,15 +85,19 @@ impl Engine {
       ));
     }
 
-    // Create the empty column file — existing rows will have no value for this col,
-    // which means the column is implicitly NULL/zero-length until rows are updated.
     let path = PathBuf::from(DB_DIR)
       .join(&table.name)
       .join(format!("{}.col", attr.name));
 
     File::create(&path).map_err(|e| e.to_string())?;
 
-    // Update schema
+    // Fill with Null for every existing row so column lengths stay in sync
+    let row_count = self.row_count(table)?;
+    if row_count > 0 {
+      let nulls = vec![Value::Null; row_count];
+      self.write_column(table, &attr, &nulls)?;
+    }
+
     let t = self
       .tables
       .iter_mut()
@@ -215,5 +217,13 @@ impl Engine {
     self.write_column(table, &updated_attr, &new_values)?;
 
     Ok(())
+  }
+
+  pub(crate) fn row_count(&self, table: &Table) -> Result<usize, String> {
+    let first_attr = match table.attrs.first() {
+      Some(a) => a,
+      None => return Ok(0),
+    };
+    Ok(self.load_column(table, first_attr)?.len())
   }
 }
