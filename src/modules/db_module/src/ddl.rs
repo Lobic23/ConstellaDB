@@ -1,9 +1,3 @@
-//=====
-// DDL
-//=====
-// TODO
-// - Alter table (add col, delete col, modify col)
-
 use std::fs::{self, File};
 use std::path::PathBuf;
 
@@ -43,6 +37,14 @@ impl Engine {
 
     Ok(())
   }
+
+
+  pub fn list_tables(&self) -> Result<Vec<String>, String> {
+    if self.tables.is_empty() {
+        return Err("No tables exist".to_string());
+    }
+    Ok(self.tables.iter().map(|table| table.name.clone()).collect())
+}
 
   pub fn drop_table(&mut self, table_name: &str) -> Result<(), String> {
     if !self.table_exists(table_name) {

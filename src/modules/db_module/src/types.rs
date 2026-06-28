@@ -23,10 +23,6 @@ pub enum Condition {
   Or(Box<Condition>, Box<Condition>),
 }
 
-//=======
-// Table
-//=======
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Type {
   Int,
@@ -64,10 +60,6 @@ impl Table {
     return false;
   }
 }
-
-//=========
-// Entity
-//=========
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub enum Value {

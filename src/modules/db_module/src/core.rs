@@ -10,10 +10,6 @@ pub struct Engine {
   pub(crate) tables: Vec<Table>,
 }
 
-//=========================
-// Engine of the db module
-//=========================
-
 impl Engine {
   pub fn new() -> Self {
     let db_dir = Path::new(DB_DIR);
@@ -36,11 +32,7 @@ impl Engine {
   pub fn get_tables(&self) -> Vec<Table> {
     self.tables.clone()
   }
-
-  //==============================
-  // DATABASE MODULE PRIVATE API'S
-  //==============================
-
+  
   pub(crate) fn save_schema(&self) {
     let file = File::create(PathBuf::from(DB_DIR).join(SCHEMA_FILE).to_str().unwrap()).unwrap();
 
