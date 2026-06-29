@@ -9,7 +9,6 @@ dependencies = [
  "bincode",
  "cmd_module",
  "db_module",
- "network_module",
  "protocol_module",
  "serde",
  "serde_json",
@@ -913,15 +912,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "network_module"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]

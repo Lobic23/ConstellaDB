@@ -215,6 +215,7 @@ fn convert_expr(expr: SqlExpr) -> Result<Condition, CmdError> {
 
 fn convert_value(expr: SqlExpr) -> Result<Value, CmdError> {
   match expr {
+    SqlExpr::Value(SqlValue::Null) => Ok(Value::Null),
     SqlExpr::Value(SqlValue::Number(n, _)) => n
       .parse::<i32>()
       .map(Value::Int)
