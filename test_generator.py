@@ -4,8 +4,9 @@ from pathlib import Path
 import shutil
 
 START_PORT = 7000
-LEADER = "leader"
-FOLLOWERS = ["follower_1", "follower_2"]
+CLIENT_PORT = 8888
+NODE_PORT = 9999
+NODE_CNT = 3
 
 
 def get_local_ip():
@@ -41,9 +42,49 @@ def gen_job_script(node, port, query_port):
   print(f"Generated {filename}")
 
 
-def gen_node_script(node, port, job_port, followers=None):
+def gen_node_script(node, port, gateway_port):
   filename = f"{TEST_DIR}/{node}/run_node.sh"
 
+  query_port = port
+  job_port   = port + 1
+  node_port  = port + 2
+
+  with open(filename, "w") as f:
+    f.writelines([
+        "#!/bin/sh\n",
+        "set -x\n",
+        "\n",
+        f"./job_service -p {job_port} -q {LOCAL_IP}:{query_port} &\n",
+        "JOB_PID=$!\n",
+        "\n",
+        "cleanup() {\n",
+        "  kill $JOB_PID 2>/dev/null\n",
+        "}\n",
+        "\n",
+        "trap cleanup EXIT\n",
+        "sleep 2\n",
+        "\n",
+        f"./node -p {node_port} -j {LOCAL_IP}:{job_port} -g {LOCAL_IP}:{gateway_port}\n",
+    ])
+
+  os.chmod(filename, 0o755)
+  print(f"Generated {filename}")
+
+def gen_gateway_script(client_port, node_port):
+  filename = f"{TEST_DIR}/run_gateway.sh"
+
+  with open(filename, "w") as f:
+    f.writelines([
+      "#!/bin/sh\n",
+      "set +x\n",
+      f"./gateway -c {client_port} -n {node_port}\n",
+    ])
+
+  os.chmod(filename, 0o755)
+  print(f"Generated {filename}")
+
+
+  """
   if not followers:
     with open(filename, "w") as f:
       f.writelines([
@@ -57,23 +98,25 @@ def gen_node_script(node, port, job_port, followers=None):
         "#!/bin/sh\n",
         f"./node -p {port} -j {LOCAL_IP}:{job_port} --leader --followers {followers_str}"
       ])
-
-  os.chmod(filename, 0o755)
-  print(f"Generated {filename}")
+  """
 
 
 LOCAL_IP = get_local_ip()
 HERE = Path(__file__).resolve().parent
 TEST_DIR = f"{HERE}/test_environment"
 
-all_nodes = [LEADER, *FOLLOWERS]
-followers_ip = []
-
 # Generate the test environment directory
 os.makedirs(TEST_DIR, exist_ok=True)
 
+# Copy the gateway
+shutil.copy(f"{HERE}/target/debug/gateway", f"{TEST_DIR}/")
+print(f"Copied {HERE}/target/debug/gateway -> {TEST_DIR}/")
+
+gen_gateway_script(CLIENT_PORT, NODE_PORT)
+
 # Generate the directory for each nodes
-for node in all_nodes:
+for i in range(NODE_CNT):
+  node = f"node_{i+1}"
   os.makedirs(f"{TEST_DIR}/{node}", exist_ok=True)
 
   # Copy the executables
@@ -85,18 +128,13 @@ for node in all_nodes:
 
   shutil.copy(f"{HERE}/target/debug/query_service", f"{TEST_DIR}/{node}")
   print(f"Copied {HERE}/target/debug/query_service-> {TEST_DIR}/{node}")
+
+  shutil.copy(f"{HERE}/target/debug/db_service", f"{TEST_DIR}/{node}")
+  print(f"Copied {HERE}/target/debug/db_service-> {TEST_DIR}/{node}")
   print("")
 
-# Generate for followers
-for follower in FOLLOWERS:
-  gen_query_script(follower, START_PORT)
-  gen_job_script(follower, START_PORT + 1, START_PORT)
-  gen_node_script(follower, START_PORT + 2, START_PORT + 1)
-  followers_ip.append(START_PORT + 2)
-  print("")
+  gen_node_script(f"{node}", START_PORT, NODE_PORT)
   START_PORT += 1000
+  print("")
 
-# Generate for leader
-gen_query_script(LEADER, START_PORT)
-gen_job_script(LEADER, START_PORT + 1, START_PORT)
-gen_node_script(LEADER, START_PORT + 2, START_PORT + 1, followers_ip)
+
