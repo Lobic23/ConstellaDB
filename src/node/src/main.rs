@@ -1,3 +1,8 @@
+// TODOs:
+// [] Make leader do work too
+// [] Proper distribution algorithm
+// [] Backup
+
 pub mod node;
 pub mod leader;
 pub mod listener;

@@ -9,7 +9,7 @@ members = [
   "src/services/job_service",
   "src/services/db_service",
   "src/services/query_service",
-  "src/node",
+  "src/node", "src/gateway",
 ]
 
 [package]
