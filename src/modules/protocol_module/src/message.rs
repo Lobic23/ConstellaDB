@@ -1,25 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum MessageType {
-  Query,       // Request to execute database query
-  Response,    // Reply to query
-  Heartbeat,   // Alive singal between nodes
-  Sync,        // Data synchronization between nodes
-  Error,       // Error notification
-  JobInit     { job_id: String }, // New Job Initialized
-  JobComplete { job_id: String }, // Job is completed
-}
+use cmd_module::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Command {
-  Select(String),
-  Insert { table: String, data: Vec<u8> },
-  Update { table: String, data: Vec<u8> },
-  Delete(String),
-  Commit,
-  Rollback,
+pub enum MessageType {
+  Query,                           // Request to execute database query
+  Lead { followers: Vec<String> }, // Sent to the leader to lead the cmd
+  ExecCmd,                         // Command to execute (parsed query)
+  Response,                        // Reply to query
+  Register,                        // Register the node
+  Error,                           // Error notification
+  JobInit     { job_id: String },  // New Job Initialized
+  JobComplete { job_id: String },  // Job is completed
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

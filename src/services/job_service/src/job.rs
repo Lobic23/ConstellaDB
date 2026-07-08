@@ -26,6 +26,7 @@ pub async fn process_job(job: Job, state: Arc<Mutex<ServiceState>>) {
   let query = String::from_utf8(job.msg.payload).unwrap();
   println!("[LOG] Request: {}", &query);
 
+  /*
   // Send the query to the query service
   let s = state.lock().await;
   let client = Client::new();
@@ -41,6 +42,13 @@ pub async fn process_job(job: Job, state: Arc<Mutex<ServiceState>>) {
   // Get the response from query service
   let response_text = response.text().await.unwrap();
   println!("[LOG] Response: {}", &response_text);
+  */
+
+  let response_text = r#"{
+      "success": true,
+      "message": "Here is the response",
+      "rows": null
+  }"#.to_string();
 
   // Send the response back to the node
   let mut handler = job.job_owner_write_handler.lock().await;

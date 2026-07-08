@@ -453,6 +453,8 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "clap",
+ "cmd_module",
+ "protocol_module",
  "serde",
  "serde_json",
  "tokio",
@@ -1035,6 +1037,7 @@ name = "protocol_module"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "cmd_module",
  "serde",
  "serde_json",
  "tokio",

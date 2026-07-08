@@ -42,11 +42,11 @@ pub async fn connection_listener(
     let msg = received.unwrap();
     match msg.msg_type {
 
-      // When query message is received, a new job is created
+      // When exec command message is received, a new job is created
       // and JobInit message is sent back to the node.
       // When the job is completed a JobComplete message will
       // be sent to the node from the worker thread.
-      MessageType::Query => {
+      MessageType::ExecCmd=> {
         println!("[LOG]: New Job\n{:#?}", msg);
 
         // Create job
@@ -76,7 +76,7 @@ pub async fn connection_listener(
           handler.send(&response).await.unwrap();
         }
       },
-      _ => {},
+      _ => println!("Unexpected"),
     }
   }
 }

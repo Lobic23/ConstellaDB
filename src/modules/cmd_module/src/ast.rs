@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
 use db_module::{Condition, Data, Entity, Table};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Command {
   CreateTable(Table),
   DropTable(String),

@@ -4,6 +4,7 @@ use std::fmt;
 pub const DB_DIR: &str = "DB";
 pub const SCHEMA_FILE: &str = "schemas.json";
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Operator {
   Eq, // ==
   Ne, // !=
@@ -13,6 +14,7 @@ pub enum Operator {
   Ge, // >=
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Condition {
   Compare {
     attr: String,
@@ -82,7 +84,7 @@ impl fmt::Display for Value {
 impl Value {
   pub fn cast_to(self, target: &Type) -> Result<Value, String> {
     match (self, target) {
-      (Value::Null, _) => Ok(Value::Null), 
+      (Value::Null, _) => Ok(Value::Null),
       (Value::Int(v), Type::Int) => Ok(Value::Int(v)),
       (Value::VarChar(s), Type::VarChar(_)) => Ok(Value::VarChar(s)),
       (Value::Int(v), Type::VarChar(_)) => Ok(Value::VarChar(v.to_string())),

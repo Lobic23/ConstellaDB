@@ -8,7 +8,7 @@ pub mod leader;
 pub mod listener;
 pub mod instruction;
 
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, TcpListener};
 use clap::Parser;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -16,11 +16,11 @@ use tokio::sync::Mutex;
 use protocol_module::{
   handler::{ReadHandler, WriteHandler},
   serializer::BincodeSerializer,
+  message::{Message, MessageType},
 };
 
 use node::Node;
-use leader::connect_to_followers;
-use listener::{start_listener, connection_listener};
+use listener::{get_local_ip, start_listener, job_message_handler, gateway_message_handler};
 
 /// Commandline args for the node
 #[derive(Parser, Debug)]
@@ -29,13 +29,10 @@ struct Args {
   port: Option<u32>,
 
   #[arg(short, long)]
-  leader: bool,
-
-  #[arg(short, long, num_args=1..)]
-  followers: Option<Vec<String>>,       // IP's of the followers
+  job_service: String,
 
   #[arg(short, long)]
-  job_service: String,
+  gateway: String,
 }
 
 /// Connects to the job scheduling service and runs the listener for
@@ -57,7 +54,41 @@ async fn connect_to_job_service(node: Arc<Mutex<Node>>, job_service_ip: &str) {
   // Spawn the listener for the job service
   let x = node.clone();
   tokio::spawn(async move {
-    connection_listener(read_handler, write_handler, x).await;
+    job_message_handler(read_handler, write_handler, x).await;
+  });
+}
+
+async fn connect_to_gateway(node: Arc<Mutex<Node>>, gateway_ip: &str) {
+  let stream = TcpStream::connect(gateway_ip).await.unwrap();
+  let (reader, writer) = stream.into_split();
+  let read_handler = Arc::new(Mutex::new(
+    ReadHandler::new(reader, Box::new(BincodeSerializer))
+  ));
+  let write_handler = Arc::new(Mutex::new(
+    WriteHandler::new(writer, Box::new(BincodeSerializer))
+  ));
+
+  // Send register msg
+  {
+    let n = node.lock().await;
+    let mut w = write_handler.lock().await;
+    let msg = Message::new(
+      "test".to_string(),
+      MessageType::Register,
+      n.id.clone()
+    );
+    w.send(&msg).await.unwrap();
+  }
+
+  {
+    let mut n = node.lock().await;
+    n.gateway = Some((read_handler.clone(), write_handler.clone()));
+  }
+
+  // Spawn the listener for the gateway
+  let x = node.clone();
+  tokio::spawn(async move {
+    gateway_message_handler(read_handler, write_handler, x).await;
   });
 }
 
@@ -73,23 +104,27 @@ async fn main() {
     port = p;
   }
 
-  if args.leader {
-    {
-      let mut n = node.lock().await;
-      n.leader = true;
-    }
+  // Creating the main listener
+  let ip = get_local_ip().unwrap();
+  let listener = TcpListener::bind(
+    format!("{}:{}", ip, port)
+  ).await.unwrap();
 
-    if let Some(followers) = args.followers {
-      connect_to_followers(node.clone(), followers).await;
-    } else {
-      println!("No followers specified");
-      return;
-    }
+  let bound_port = listener.local_addr().unwrap().port();
+  let full_ip = format!("{}:{}", ip, bound_port);
+  {
+    let mut n = node.lock().await;
+    n.id = full_ip.clone();
   }
+  println!("[LOG] Node listening on {}", &full_ip);
 
   // Connecting to the job service
   let job_service_ip = args.job_service;
   connect_to_job_service(node.clone(), &job_service_ip).await;
 
-  start_listener(node, port).await;
+  // Connecting to the gateway
+  let gateway_ip = args.gateway;
+  connect_to_gateway(node.clone(), &gateway_ip).await;
+
+  start_listener(node, listener).await;
 }
