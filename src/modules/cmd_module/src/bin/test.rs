@@ -6,6 +6,7 @@ fn main() {
 
   let commands = vec![
     "CREATE TABLE people (id INT, name VARCHAR(50), age INT)",
+    "SHOW TABLES",
     "INSERT INTO people (id, name, age) VALUES (1, 'Alice', 30)",
     "INSERT INTO people (id, name, age) VALUES (2, 'Bob', 17)",
     "INSERT INTO people (id, name, age) VALUES (3, 'Charlie', 25)",
@@ -21,7 +22,7 @@ fn main() {
     println!("\n>>> {sql}");
 
     let output = match parse_cmd(sql) {
-      Ok(cmd) => execute(&mut engine, cmd),
+      Ok(cmd) => execute(&mut engine, cmd).to_string(),
       Err(e) => format!("Parse error: {e}"),
     };
 

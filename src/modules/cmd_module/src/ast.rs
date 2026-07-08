@@ -18,4 +18,5 @@ pub enum Command {
     table: String,
     conditions: Vec<Condition>,
   },
+  ShowTables
 }

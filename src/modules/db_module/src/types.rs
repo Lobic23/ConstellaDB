@@ -23,10 +23,6 @@ pub enum Condition {
   Or(Box<Condition>, Box<Condition>),
 }
 
-//=======
-// Table
-//=======
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Type {
   Int,
@@ -65,43 +61,36 @@ impl Table {
   }
 }
 
-//=========
-// Entity
-//=========
-
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub enum Value {
   Int(i32),
   VarChar(String),
+  Null,
+  // NULL is stored as a 0x00 flag byte followed by zero-filled payload bytes to maintain fixed record size.
+  // Non-NULL values are stored as a 0x01 flag byte followed by the value encoded in little-endian bytes.
 }
-impl Value {
-    pub fn cast_to(self, target: &Type) -> Result<Value, String> {
-        match (self, target) {
-            // Same types
-            (Value::Int(v), Type::Int) => Ok(Value::Int(v)),
-            (Value::VarChar(s), Type::VarChar(_)) => Ok(Value::VarChar(s)),
-
-            // Int -> VarChar
-            (Value::Int(v), Type::VarChar(_)) => {
-                Ok(Value::VarChar(v.to_string()))
-            }
-
-            // VarChar -> Int
-            (Value::VarChar(s), Type::Int) => {
-                s.trim()
-                    .parse::<i32>()
-                    .map(Value::Int)
-                    .map_err(|_| format!("Cannot cast '{}' to INT", s))
-            }
-        }
-    }
-}
-
 impl fmt::Display for Value {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Value::Int(_) => write!(f, "INT"),
       Value::VarChar(_) => write!(f, "VARCHAR"),
+      Value::Null => write!(f, "NULL"),
+    }
+  }
+}
+
+impl Value {
+  pub fn cast_to(self, target: &Type) -> Result<Value, String> {
+    match (self, target) {
+      (Value::Null, _) => Ok(Value::Null), 
+      (Value::Int(v), Type::Int) => Ok(Value::Int(v)),
+      (Value::VarChar(s), Type::VarChar(_)) => Ok(Value::VarChar(s)),
+      (Value::Int(v), Type::VarChar(_)) => Ok(Value::VarChar(v.to_string())),
+      (Value::VarChar(s), Type::Int) => s
+        .trim()
+        .parse::<i32>()
+        .map(Value::Int)
+        .map_err(|_| format!("Cannot cast '{}' to INT", s)),
     }
   }
 }

@@ -37,6 +37,9 @@ fn convert_statement(stmt: SqlStatement) -> Result<Command, CmdError> {
         attrs,
       }))
     }
+
+    SqlStatement::ShowTables { .. } => Ok(Command::ShowTables),
+
     SqlStatement::Drop { names, .. } => {
       let name = names
         .into_iter()
@@ -45,6 +48,7 @@ fn convert_statement(stmt: SqlStatement) -> Result<Command, CmdError> {
         .to_string();
       Ok(Command::DropTable(name))
     }
+
     SqlStatement::Insert {
       table_name,
       columns,
@@ -71,7 +75,9 @@ fn convert_statement(stmt: SqlStatement) -> Result<Command, CmdError> {
         data,
       }))
     }
+
     SqlStatement::Query(query) => convert_select(*query),
+
     SqlStatement::Update {
       table,
       assignments,
@@ -96,6 +102,7 @@ fn convert_statement(stmt: SqlStatement) -> Result<Command, CmdError> {
         conditions,
       })
     }
+
     SqlStatement::Delete {
       from, selection, ..
     } => {
@@ -208,6 +215,7 @@ fn convert_expr(expr: SqlExpr) -> Result<Condition, CmdError> {
 
 fn convert_value(expr: SqlExpr) -> Result<Value, CmdError> {
   match expr {
+    SqlExpr::Value(SqlValue::Null) => Ok(Value::Null),
     SqlExpr::Value(SqlValue::Number(n, _)) => n
       .parse::<i32>()
       .map(Value::Int)

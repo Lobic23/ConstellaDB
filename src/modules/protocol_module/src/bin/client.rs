@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // ---------------- MESSAGE ----------------
     let msg = Message::new(
-        1,
+        1.to_string(),
         MessageType::Query,
         "client".to_string(),
     )

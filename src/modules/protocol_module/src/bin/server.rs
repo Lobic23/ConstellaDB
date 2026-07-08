@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // ---------------- RESPONSE ----------------
     let reply = Message::new(
-        2,
+        2.to_string(),
         MessageType::Response,
         "server".to_string(),
     )

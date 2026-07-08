@@ -1,10 +1,9 @@
 [workspace]
 members = [
   "src/modules/cmd_module",
-  "src/modules/db_module", "src/modules/job_scheduler",
-  "src/modules/network_module",
+  "src/modules/db_module",
+  "src/modules/job_scheduler",
   "src/modules/protocol_module",
-  "src/modules/server_module",
   "src/modules/job_scheduler",
   "src/services/job_service",
   "src/services/db_service",
@@ -21,8 +20,6 @@ edition = "2024"
 protocol_module = { path = "src/modules/protocol_module" }
 cmd_module = { path = "src/modules/cmd_module" }
 db_module = { path = "src/modules/db_module" }
-network_module = { path = "src/modules/network_module" }
-server_module = { path = "src/modules/server_module" }
 
 tracing = "0.1"
 tracing-subscriber = "0.3"
@@ -37,3 +34,15 @@ axum = "0.8.9"
 sqlparser = "0.45"
 thiserror = "1"
 reqwest = { version = "0.13.4", features = ["json"] }
+
+
+[dependencies]
+protocol_module = { workspace = true }
+cmd_module = { workspace = true }
+db_module = { workspace = true }
+
+tokio = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }

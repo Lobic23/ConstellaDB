@@ -7,27 +7,36 @@ pub enum ExecuteResult {
   Rows(Vec<Entity>),
 }
 
+impl std::fmt::Display for ExecuteResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecuteResult::Ok(msg) => write!(f, "{msg}"),
+            ExecuteResult::Error(msg) => write!(f, "{msg}"),
+            ExecuteResult::Rows(rows) => write!(f, "{}", format_rows(rows.clone())),
+        }
+    }
+}
+
 pub fn execute(engine: &mut Engine, cmd: Command) -> ExecuteResult {
   match cmd {
-    Command::CreateTable(t) => {
-      match engine.create_table(&t) {
-        Ok(_) => ExecuteResult::Ok(format!("OK: table '{}' created", t.name)),
-        Err(e) => ExecuteResult::Error(format!("Error: {e}")),
-      }
+    Command::CreateTable(t) => match engine.create_table(&t) {
+      Ok(_) => ExecuteResult::Ok(format!("OK: table '{}' created", t.name)),
+      Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
-    Command::DropTable(name) => {
-      match engine.drop_table(&name) {
-        Ok(_) => ExecuteResult::Ok(format!("OK: table '{}' dropped", name)),
-        Err(e) => ExecuteResult::Error(format!("Error: {e}")),
-      }
+    Command::ShowTables => match engine.list_tables() {
+      Ok(tables) => ExecuteResult::Ok(format!("Tables:\n{}", tables.join("\n"))),
+      Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
-    Command::Insert(e) => {
-      match engine.insert(&e) {
-        Ok(_) => ExecuteResult::Ok(format!("OK: {} row inserted into '{}'", e.data.len(), e.of)),
-        Err(e) => ExecuteResult::Error(format!("Error: {e}")),
-      }
+    Command::DropTable(name) => match engine.drop_table(&name) {
+      Ok(_) => ExecuteResult::Ok(format!("OK: table '{}' dropped", name)),
+      Err(e) => ExecuteResult::Error(format!("Error: {e}")),
+    },
+
+    Command::Insert(e) => match engine.insert(&e) {
+      Ok(_) => ExecuteResult::Ok(format!("OK: {} row inserted into '{}'", e.data.len(), e.of)),
+      Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
     Command::Select {
@@ -40,24 +49,20 @@ pub fn execute(engine: &mut Engine, cmd: Command) -> ExecuteResult {
         Ok(rows) => ExecuteResult::Rows(rows),
         Err(e) => ExecuteResult::Error(format!("Error: {e}")),
       }
-    },
+    }
 
     Command::Update {
       table,
       updates,
       conditions,
-    } => {
-      match engine.update(&table, updates, conditions) {
-        Ok(n) => ExecuteResult::Ok(format!("OK: {n} row(s) updated")),
-        Err(e) => ExecuteResult::Error(format!("Error: {e}")),
-      }
+    } => match engine.update(&table, updates, conditions) {
+      Ok(n) => ExecuteResult::Ok(format!("OK: {n} row(s) updated")),
+      Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
-    Command::Delete { table, conditions } => {
-      match engine.delete(&table, conditions) {
-        Ok(n) => ExecuteResult::Ok(format!("OK: {n} row(s) deleted")),
-        Err(e) => ExecuteResult::Error(format!("Error: {e}")),
-      }
+    Command::Delete { table, conditions } => match engine.delete(&table, conditions) {
+      Ok(n) => ExecuteResult::Ok(format!("OK: {n} row(s) deleted")),
+      Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
   }
 }
