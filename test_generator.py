@@ -45,25 +45,40 @@ def gen_job_script(node, port, query_port):
 def gen_node_script(node, port, gateway_port):
   filename = f"{TEST_DIR}/{node}/run_node.sh"
 
-  query_port = port
+  db_port = port
   job_port   = port + 1
   node_port  = port + 2
 
   with open(filename, "w") as f:
     f.writelines([
-        "#!/bin/sh\n",
+        "#!/bin/bash\n",
         "set -x\n",
         "\n",
-        f"./job_service -p {job_port} -q {LOCAL_IP}:{query_port} &\n",
-        "JOB_PID=$!\n",
+        "pids=()\n",
         "\n",
+
+        f"./db_service -p {db_port} &\n",
+        "pids+=($!)\n",
+        "\n",
+
+        "sleep 1\n",
+        "\n",
+
+        f"./job_service -p {job_port} -d {LOCAL_IP}:{db_port} &\n",
+        "pids+=($!)\n",
+        "\n",
+
         "cleanup() {\n",
-        "  kill $JOB_PID 2>/dev/null\n",
+        "  kill ${pids[@]} 2>/dev/null\n",
         "}\n",
         "\n",
+
         "trap cleanup EXIT\n",
+        "\n",
+
         "sleep 2\n",
         "\n",
+
         f"./node -p {node_port} -j {LOCAL_IP}:{job_port} -g {LOCAL_IP}:{gateway_port}\n",
     ])
 

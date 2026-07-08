@@ -19,7 +19,7 @@ struct Args {
   threads: Option<usize>,
 
   #[arg(short, long)]
-  query_service: String,
+  db_service: String,
 }
 
 #[tokio::main]
@@ -44,11 +44,11 @@ async fn main() {
     s.max_threads = t;
   }
 
-  // Saving the query service ip
+  // Saving the db service ip
   {
-    let query_service_ip = args.query_service;
+    let db_service_ip = args.db_service;
     let mut s = state.lock().await;
-    s.query_service_ip = query_service_ip;
+    s.db_service_ip = db_service_ip;
   }
 
   start_listener(state, port).await;

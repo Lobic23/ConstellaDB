@@ -353,6 +353,7 @@ name = "db_service"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "clap",
  "db_module",
  "serde",
  "serde_json",

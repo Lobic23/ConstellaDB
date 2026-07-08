@@ -1,20 +1,21 @@
 use axum::{
     extract::{Path, State},
-    routing::{delete, get, post, put},
+    routing::{delete, get},
     Json,
     Router,
 };
 
-use serde::Deserialize;
+use clap::Parser;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
-
 use std::sync::{Arc, Mutex};
+use tokio::net::TcpListener;
 
 use db_module::{
-    Attr, 
-    Engine, 
-    Table, 
+    Attr,
+    Engine,
+    Table,
     Type,
     Entity,
     Value,
@@ -23,10 +24,60 @@ use db_module::{
     Operator,
 };
 
+#[derive(Parser, Debug)]
+struct Args {
+  #[arg(short, long)]
+  port: Option<u32>,
+}
+
+/// Gets the local ip of the machine
+pub fn get_local_ip() -> std::io::Result<std::net::IpAddr> {
+  let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
+  socket.connect("8.8.8.8:80")?;
+  Ok(socket.local_addr()?.ip())
+}
+
+pub enum ExecuteResult {
+    Ok(String),
+    Error(String),
+    Rows(Vec<Entity>),
+}
+
+#[derive(Serialize)]
+struct ApiResponse {
+    success: bool,
+    message: Option<String>,
+    rows: Option<Vec<Entity>>,
+}
+
+fn map_response(result: ExecuteResult) -> Json<ApiResponse> {
+    match result {
+        ExecuteResult::Ok(msg) => Json(ApiResponse {
+            success: true,
+            message: Some(msg),
+            rows: None,
+        }),
+
+        ExecuteResult::Error(msg) => Json(ApiResponse {
+            success: false,
+            message: Some(msg),
+            rows: None,
+        }),
+
+        ExecuteResult::Rows(rows) => Json(ApiResponse {
+            success: true,
+            message: None,
+            rows: Some(rows),
+        }),
+    }
+}
+
+
 #[derive(Clone)]
 struct AppState {
     engine: Arc<Mutex<Engine>>,
 }
+
 
 #[derive(Deserialize)]
 struct CreateAttrRequest {
@@ -34,11 +85,13 @@ struct CreateAttrRequest {
     data_type: String,
 }
 
+
 #[derive(Deserialize)]
 struct CreateTableRequest {
     name: String,
     attrs: Vec<CreateAttrRequest>,
 }
+
 
 #[derive(Deserialize)]
 struct UpdateRequest {
@@ -46,18 +99,20 @@ struct UpdateRequest {
     updates: HashMap<String, JsonValue>,
 }
 
+
 async fn health() -> &'static str {
     "DB Service Running"
 }
 
+
 async fn create_table(
     State(state): State<AppState>,
     Json(req): Json<CreateTableRequest>,
-) -> String {
+) -> Json<ApiResponse> {
     let mut engine = state.engine.lock().unwrap();
 
-    let attrs: Vec<Attr> = req
-        .attrs.into_iter()
+    let attrs = req.attrs
+        .into_iter()
         .map(|a| {
             let data_type = match a.data_type.to_uppercase().as_str() {
                 "INT" => Type::Int,
@@ -72,16 +127,17 @@ async fn create_table(
         })
         .collect();
 
-    let table = Table {
+    let result = match engine.create_table(&Table {
         name: req.name,
         attrs,
+    }) {
+        Ok(_) => ExecuteResult::Ok("Table created successfully".into()),
+        Err(e) => ExecuteResult::Error(e),
     };
 
-    match engine.create_table(&table) {
-        Ok(_) => "Table created successfully".to_string(),
-        Err(e) => e,
-    }
+    map_response(result)
 }
+
 
 async fn list_table(
     State(state): State<AppState>,
@@ -91,35 +147,39 @@ async fn list_table(
     Json(engine.get_tables())
 }
 
+
 async fn drop_table(
     Path(table_name): Path<String>,
     State(state): State<AppState>,
-) -> String {
+) -> Json<ApiResponse> {
     let mut engine = state.engine.lock().unwrap();
 
-    match engine.drop_table(&table_name) {
-        Ok(_) => format!("Table '{}' deleted", table_name),
-        Err(e) => e,
-    }
+    let result = match engine.drop_table(&table_name) {
+        Ok(_) => {
+            ExecuteResult::Ok(format!("Table '{}' deleted", table_name))
+        }
+
+        Err(e) => ExecuteResult::Error(e),
+    };
+
+    map_response(result)
 }
+
 
 async fn insert_row(
     Path(table_name): Path<String>,
     State(state): State<AppState>,
-    Json(payload): Json<HashMap<String,JsonValue>>,
-) -> String {
+    Json(payload): Json<HashMap<String, JsonValue>>,
+) -> Json<ApiResponse> {
     let mut data = Vec::new();
 
-    for (name,value) in payload {
+    for (name, value) in payload {
         let value = match json_to_db_value(value) {
             Ok(v) => v,
-            Err(e) => return e,
+            Err(e) => return map_response(ExecuteResult::Error(e)),
         };
 
-        data.push(Data { 
-            name, 
-            value 
-        });  
+        data.push(Data { name, value });
     }
 
     let entity = Entity {
@@ -129,53 +189,57 @@ async fn insert_row(
 
     let mut engine = state.engine.lock().unwrap();
 
-    match engine.insert(&entity) {
-        Ok(_) => "Row inserted".to_string(),
-        Err(e) => e,
-    }
+    let result = match engine.insert(&entity) {
+        Ok(_) => ExecuteResult::Ok("Row inserted".into()),
+        Err(e) => ExecuteResult::Error(e),
+    };
+
+    map_response(result)
 }
+
 
 async fn select_rows(
     Path(table_name): Path<String>,
     State(state): State<AppState>,
-) -> String {
+) -> Json<ApiResponse> {
     let mut engine = state.engine.lock().unwrap();
 
-    match engine.select(
+    let result = match engine.select(
         &table_name,
         vec!["*"],
         vec![],
     ) {
-        Ok(rows) => format!("{:#?}", rows),
-        Err(e) => e,
-    }
+        Ok(rows) => ExecuteResult::Rows(rows),
+        Err(e) => ExecuteResult::Error(e),
+    };
+
+    map_response(result)
 }
+
 
 async fn update_row(
     Path(table_name): Path<String>,
     State(state): State<AppState>,
     Json(req): Json<UpdateRequest>,
-) -> String {
+) -> Json<ApiResponse> {
     let mut updates = Vec::new();
-    
+
     for (name, value) in req.updates {
         let value = match json_to_db_value(value) {
             Ok(v) => v,
-            Err(e) => return e,
+            Err(e) => return map_response(ExecuteResult::Error(e)),
         };
 
-        updates.push(Data {
-            name,
-            value,
-        });
+        updates.push(Data { name, value });
     }
+
 
     let mut conditions = Vec::new();
 
     for (attr, value) in req.conditions {
         let value = match json_to_db_value(value) {
             Ok(v) => v,
-            Err(e) => return e,
+            Err(e) => return map_response(ExecuteResult::Error(e)),
         };
 
         conditions.push(
@@ -187,29 +251,38 @@ async fn update_row(
         );
     }
 
+
     let mut engine = state.engine.lock().unwrap();
 
-    match engine.update(
+    let result = match engine.update(
         &table_name,
         updates,
         conditions,
     ) {
-        Ok(count) => format!("{} row(s) updated", count),
-        Err(e) => e,
-    }
+        Ok(count) => {
+            ExecuteResult::Ok(
+                format!("{} row(s) updated", count)
+            )
+        }
+
+        Err(e) => ExecuteResult::Error(e),
+    };
+
+    map_response(result)
 }
+
 
 async fn delete_row(
     Path(table_name): Path<String>,
     State(state): State<AppState>,
     Json(payload): Json<HashMap<String, JsonValue>>,
-) -> String {
+) -> Json<ApiResponse> {
     let mut conditions = Vec::new();
 
     for (attr, value) in payload {
         let value = match json_to_db_value(value) {
             Ok(v) => v,
-            Err(e) => return e,
+            Err(e) => return map_response(ExecuteResult::Error(e)),
         };
 
         conditions.push(
@@ -221,21 +294,32 @@ async fn delete_row(
         );
     }
 
+
     let mut engine = state.engine.lock().unwrap();
 
-    match engine.delete(&table_name, conditions) {
-        Ok(count) => format!("{} row(s) deleted", count),
-        Err(e) => e,
-    }
+    let result = match engine.delete(
+        &table_name,
+        conditions,
+    ) {
+        Ok(count) => {
+            ExecuteResult::Ok(
+                format!("{} row(s) deleted", count)
+            )
+        }
+
+        Err(e) => ExecuteResult::Error(e),
+    };
+
+    map_response(result)
 }
+
 
 fn json_to_db_value(value: JsonValue) -> Result<Value, String> {
     match value {
         JsonValue::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Ok(Value::Int(i as i32))
-            } else {
-                Err("Invalid integer".to_string())
+            match n.as_i64() {
+                Some(i) => Ok(Value::Int(i as i32)),
+                None => Err("Invalid integer".into()),
             }
         }
 
@@ -243,22 +327,39 @@ fn json_to_db_value(value: JsonValue) -> Result<Value, String> {
             Ok(Value::VarChar(s))
         }
 
-        _ => Err("Unsupprted data formats".to_string()),
+        _ => Err("Unsupported data format".into()),
     }
 }
 
+
 #[tokio::main]
 async fn main() {
+    let args = Args::parse();
     let state = AppState {
-        engine: Arc::new(Mutex::new(Engine::new())),
+        engine: Arc::new(
+            Mutex::new(Engine::new())
+        ),
     };
+
+    // Extract port from args
+    let mut port = 0;
+    if let Some(p) = args.port {
+        port = p;
+    }
 
     let app = Router::new()
         .route("/", get(health))
-        .route("/tables", get(list_table).post(create_table))
-        .route("/tables/{name}", delete(drop_table))
         .route(
-            "/tables/{name}/rows", 
+            "/tables",
+            get(list_table)
+                .post(create_table),
+        )
+        .route(
+            "/tables/{name}",
+            delete(drop_table),
+        )
+        .route(
+            "/tables/{name}/rows",
             get(select_rows)
                 .post(insert_row)
                 .put(update_row)
@@ -266,14 +367,16 @@ async fn main() {
         )
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
-        .await
-        .unwrap();
+    let ip = get_local_ip().unwrap();
 
-    println!("DB Service running at http://localhost:3000");
+    let listener = TcpListener::bind(
+        format!("{}:{}", ip, port)
+    ).await.unwrap();
+    let bound_port = listener.local_addr().unwrap().port();
+    let full_ip = format!("{}:{}", ip, bound_port);
+    println!("DB Service running at {}", full_ip);
 
     axum::serve(listener, app)
         .await
         .unwrap();
 }
-
