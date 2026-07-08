@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 protocol_module.workspace = true
+cmd_module.workspace = true
+db_module.workspace = true
 
 axum.workspace = true
 tokio.workspace = true

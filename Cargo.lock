@@ -831,6 +831,8 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
+ "cmd_module",
+ "db_module",
  "protocol_module",
  "reqwest",
  "serde",

@@ -7,6 +7,7 @@ use protocol_module::{
   handler::WriteHandler,
   message::{MessageType, Message},
 };
+use cmd_module::{execute, ExecuteResult};
 
 use crate::state::ServiceState;
 
@@ -19,12 +20,37 @@ pub struct Job {
 }
 
 
+//TODO(slok): The process job should be independent of the state
+//otherwise it defeats the whole purpose of multithread cuz of mutex locks
+
 /// Job processor which calls to the query service
 /// and returns the response to the job owner via tcp stream
 pub async fn process_job(job: Job, state: Arc<Mutex<ServiceState>>) {
-  // Extract the query
-  let query = String::from_utf8(job.msg.payload).unwrap();
-  println!("[LOG] Request: {}", &query);
+  let mut s = state.lock().await;
+  let cmd = job.msg.command;
+  let mut engine = s.engine.lock().await;
+
+  // TODO(slok): Give this task to the db service
+  let result = execute(&mut engine, cmd.expect("Command not found"));
+  let response = match result {
+    ExecuteResult::Ok(msg) => serde_json::json!({
+      "success": true,
+      "message": msg,
+      "rows": null
+    }),
+    ExecuteResult::Error(msg) => serde_json::json!({
+      "success": false,
+      "message": msg,
+      "rows": null
+    }),
+    ExecuteResult::Rows(rows) => serde_json::json!({
+      "success": true,
+      "message": null,
+      "rows": rows
+    }),
+  };
+
+  let response_text = response.to_string();
 
   /*
   // Send the query to the query service
@@ -43,12 +69,6 @@ pub async fn process_job(job: Job, state: Arc<Mutex<ServiceState>>) {
   let response_text = response.text().await.unwrap();
   println!("[LOG] Response: {}", &response_text);
   */
-
-  let response_text = r#"{
-      "success": true,
-      "message": "Here is the response",
-      "rows": null
-  }"#.to_string();
 
   // Send the response back to the node
   let mut handler = job.job_owner_write_handler.lock().await;
