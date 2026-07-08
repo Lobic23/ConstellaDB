@@ -47,6 +47,7 @@ impl State {
   }
 }
 
+/// Handles the client to gateway communication
 async fn handle_client_connection(
   state: Arc<Mutex<State>>,
   read_handler_mutex: Arc<Mutex<ReadHandler>>,
@@ -115,6 +116,7 @@ async fn handle_client_connection(
   }
 }
 
+/// Handles the node to gateway communication
 async fn handle_node_connection(
   state: Arc<Mutex<State>>,
   read_handler_mutex: Arc<Mutex<ReadHandler>>,
@@ -128,9 +130,7 @@ async fn handle_node_connection(
       handler.receive().await
     };
 
-    // TODO(slok): Remove the node when connection is closed
-    // - remove from the node list
-    // - remove the leader if leader left
+    // Remove the node when connection is closed
     if let Err(e) = received {
       println!("[LOG] Node connection lost due to: {}", e);
 

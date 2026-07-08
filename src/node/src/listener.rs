@@ -29,6 +29,8 @@ pub fn get_local_ip() -> std::io::Result<std::net::IpAddr> {
   Ok(socket.local_addr()?.ip())
 }
 
+/// Handler that handles the messages/commands sent by [leader] node
+/// to the [follower] node
 pub async fn leader_message_handler(
   read_handler_mutex: Arc<Mutex<ReadHandler>>,
   write_handler_mutex: Arc<Mutex<WriteHandler>>,
@@ -68,9 +70,11 @@ pub async fn leader_message_handler(
   }
 }
 
+/// Handler that handles the messages/commands sent by [follower] node
+/// to the [leader] node
 pub async fn follower_message_handler(
   read_handler_mutex: Arc<Mutex<ReadHandler>>,
-  write_handler_mutex: Arc<Mutex<WriteHandler>>,
+  _write_handler_mutex: Arc<Mutex<WriteHandler>>,
   node: Arc<Mutex<Node>>
 ) {
   loop {
@@ -174,9 +178,11 @@ pub async fn follower_message_handler(
   }
 }
 
+/// Handler that handles the messages/commands sent by [job schedular service]
+/// to the [follower/leader] node
 pub async fn job_message_handler(
   read_handler_mutex: Arc<Mutex<ReadHandler>>,
-  write_handler_mutex: Arc<Mutex<WriteHandler>>,
+  _write_handler_mutex: Arc<Mutex<WriteHandler>>,
   node: Arc<Mutex<Node>>
 ) {
   loop {
@@ -233,6 +239,8 @@ pub async fn job_message_handler(
   }
 }
 
+/// Handler that handles the messages/commands sent by [gateway]
+/// to the [leader] node
 pub async fn gateway_message_handler(
   read_handler_mutex: Arc<Mutex<ReadHandler>>,
   write_handler_mutex: Arc<Mutex<WriteHandler>>,
@@ -252,6 +260,8 @@ pub async fn gateway_message_handler(
     let msg = received.unwrap();
     match &msg.msg_type {
 
+      // When lead command is received, a new instruction is created
+      // for that operation and work is distributed among the provided followers
       MessageType::Lead { followers } => {
         create_new_instruction(
           &msg,
@@ -269,8 +279,7 @@ pub async fn gateway_message_handler(
 
 
 /// Runs the connection listener in which other nodes will connect to
-/// If the node is follower -> leader will connect to this listener
-/// If the node is leader -> external client will connect to this listener
+/// Here leader node is connected to the follower node
 pub async fn start_listener(node: Arc<Mutex<Node>>, listener: TcpListener) {
   loop {
     let (stream, addr) = listener.accept().await.unwrap();

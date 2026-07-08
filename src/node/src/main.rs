@@ -58,6 +58,7 @@ async fn connect_to_job_service(node: Arc<Mutex<Node>>, job_service_ip: &str) {
   });
 }
 
+/// Connects to the gateway and runs the listener for the gateway commands
 async fn connect_to_gateway(node: Arc<Mutex<Node>>, gateway_ip: &str) {
   let stream = TcpStream::connect(gateway_ip).await.unwrap();
   let (reader, writer) = stream.into_split();

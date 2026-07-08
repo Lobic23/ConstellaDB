@@ -1,19 +1,15 @@
 /// Here lies the functionality of the leader node
 
-use tokio::net::TcpStream;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use rand::seq::IteratorRandom;
 
 use protocol_module::{
-  handler::{ReadHandler, WriteHandler},
   message::{Message, MessageType},
-  serializer::BincodeSerializer,
 };
 use cmd_module::Command;
 
 use crate::node::Node;
-use crate::instruction::NodeStatus;
 
 /// Distribute the message to the followers
 /// TODO(slok): For now this distributes the message to every follower.
@@ -39,6 +35,8 @@ pub async fn distribute_message(msg: &Message, node: Arc<Mutex<Node>>) {
 
   if let Some(instruction) = instructions.get(&msg.id) {
     match new_msg.command.as_ref().unwrap() {
+
+      // Distribute to a random follower when insert is sent
       Command::Insert(_) => {
         let chosen = {
           let mut rng = rand::rng();
@@ -65,6 +63,7 @@ pub async fn distribute_message(msg: &Message, node: Arc<Mutex<Node>>) {
           println!("[LOG] Sent INSERT to {}:\n{:#?}", ip, new_msg);
         }
       }
+
       _ => {
         for (ip, (_, write_handler)) in &instruction.followers {
           let mut handler = write_handler.lock().await;

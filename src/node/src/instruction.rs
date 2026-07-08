@@ -6,7 +6,7 @@ use tokio::net::TcpStream;
 use db_module::Entity;
 use protocol_module::{
   handler::{ReadHandler, WriteHandler},
-  message::{Message, MessageType},
+  message::Message,
   serializer::BincodeSerializer,
 };
 
