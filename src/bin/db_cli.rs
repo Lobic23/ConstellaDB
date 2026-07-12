@@ -2,8 +2,9 @@ use cmd_module::{execute, parse_cmd};
 use db_module::Engine;
 use std::io::{self, Write};
 
-fn main() {
-  let mut engine = Engine::new();
+#[tokio::main]
+async fn main() {
+  let mut engine = Engine::new().await;
 
   println!("ConstellaDB CLI");
   println!("Type SQL statements. Type 'exit' or 'quit' or 'q' to leave.\n");
@@ -28,7 +29,7 @@ fn main() {
     }
 
     let result = match parse_cmd(sql) {
-      Ok(cmd) => execute(&mut engine, cmd).to_string(),
+      Ok(cmd) => execute(&mut engine, cmd).await.to_string(),
       Err(e) => format!("Parse error: {e}"),
     };
 

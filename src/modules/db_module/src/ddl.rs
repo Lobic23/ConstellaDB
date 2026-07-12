@@ -42,7 +42,7 @@ impl Engine {
     Ok(())
   }
 
-  pub fn list_tables(&self) -> Result<Vec<String>, String> {
+  pub async fn list_tables(&self) -> Result<Vec<String>, String> {
     if self.tables.is_empty() {
       return Err("No tables exist".to_string());
     }

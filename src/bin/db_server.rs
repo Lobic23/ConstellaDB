@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 #[tokio::main]
 async fn main() {
   let addr = "0.0.0.0:7979";
-  let engine = Arc::new(Mutex::new(Engine::new()));
+  let engine = Arc::new(Mutex::new(Engine::new().await));
 
   let listener = TcpListener::bind(addr).await.unwrap();
   println!("[db_server] listening on {}", addr);
@@ -47,7 +47,7 @@ async fn main() {
             let result = match parse_cmd(&sql) {
               Ok(cmd) => {
                 let mut eng = engine.lock().await;
-                execute(&mut eng, cmd).to_string()
+                execute(&mut eng, cmd).await.to_string()
               }
               Err(e) => format!("Parse error: {e}"),
             };

@@ -17,24 +17,24 @@ impl std::fmt::Display for ExecuteResult {
     }
 }
 
-pub fn execute(engine: &mut Engine, cmd: Command) -> ExecuteResult {
+pub async fn execute(engine: &mut Engine, cmd: Command) -> ExecuteResult {
   match cmd {
-    Command::CreateTable(t) => match engine.create_table(&t) {
+    Command::CreateTable(t) => match engine.create_table(&t).await {
       Ok(_) => ExecuteResult::Ok(format!("OK: table '{}' created", t.name)),
       Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
-    Command::ShowTables => match engine.list_tables() {
+    Command::ShowTables => match engine.list_tables().await {
       Ok(tables) => ExecuteResult::Ok(format!("Tables:\n{}", tables.join("\n"))),
       Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
-    Command::DropTable(name) => match engine.drop_table(&name) {
+    Command::DropTable(name) => match engine.drop_table(&name).await {
       Ok(_) => ExecuteResult::Ok(format!("OK: table '{}' dropped", name)),
       Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
-    Command::Insert(e) => match engine.insert(&e) {
+    Command::Insert(e) => match engine.insert(&e).await {
       Ok(_) => ExecuteResult::Ok(format!("OK: {} row inserted into '{}'", e.data.len(), e.of)),
       Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
@@ -45,7 +45,7 @@ pub fn execute(engine: &mut Engine, cmd: Command) -> ExecuteResult {
       conditions,
     } => {
       let attrs: Vec<_> = attrs.iter().map(|s| s.as_str()).collect();
-      match engine.select(&table, attrs, conditions) {
+      match engine.select(&table, attrs, conditions).await {
         Ok(rows) => ExecuteResult::Rows(rows),
         Err(e) => ExecuteResult::Error(format!("Error: {e}")),
       }
@@ -55,12 +55,12 @@ pub fn execute(engine: &mut Engine, cmd: Command) -> ExecuteResult {
       table,
       updates,
       conditions,
-    } => match engine.update(&table, updates, conditions) {
+    } => match engine.update(&table, updates, conditions).await {
       Ok(n) => ExecuteResult::Ok(format!("OK: {n} row(s) updated")),
       Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
-    Command::Delete { table, conditions } => match engine.delete(&table, conditions) {
+    Command::Delete { table, conditions } => match engine.delete(&table, conditions).await {
       Ok(n) => ExecuteResult::Ok(format!("OK: {n} row(s) deleted")),
       Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
