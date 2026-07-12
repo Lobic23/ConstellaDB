@@ -26,15 +26,13 @@ async fn main() {
     let args = Args::parse();
 
     // Extract port from args
-    let mut port = 0;
-    if let Some(p) = args.port {
-        port = p;
-    }
+    let port = args.port.unwrap_or(8080);
     let ip = get_local_ip().unwrap();
 
     tracing_subscriber::fmt::init();
 
-    let engine = Engine::new();
+    // Engine::new() is async, so await it
+    let engine = Engine::new().await;
     let state = Arc::new(AppState::new(engine));
 
     let app = Router::new()

@@ -9,8 +9,9 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 
 use db_module::{
     Attr,
@@ -72,12 +73,10 @@ fn map_response(result: ExecuteResult) -> Json<ApiResponse> {
     }
 }
 
-
 #[derive(Clone)]
 struct AppState {
     engine: Arc<Mutex<Engine>>,
 }
-
 
 #[derive(Deserialize)]
 struct CreateAttrRequest {
@@ -85,13 +84,11 @@ struct CreateAttrRequest {
     data_type: String,
 }
 
-
 #[derive(Deserialize)]
 struct CreateTableRequest {
     name: String,
     attrs: Vec<CreateAttrRequest>,
 }
-
 
 #[derive(Deserialize)]
 struct UpdateRequest {
@@ -99,17 +96,15 @@ struct UpdateRequest {
     updates: HashMap<String, JsonValue>,
 }
 
-
 async fn health() -> &'static str {
     "DB Service Running"
 }
-
 
 async fn create_table(
     State(state): State<AppState>,
     Json(req): Json<CreateTableRequest>,
 ) -> Json<ApiResponse> {
-    let mut engine = state.engine.lock().unwrap();
+    let mut engine = state.engine.lock().await;
 
     let attrs = req.attrs
         .into_iter()
@@ -130,7 +125,7 @@ async fn create_table(
     let result = match engine.create_table(&Table {
         name: req.name,
         attrs,
-    }) {
+    }).await {
         Ok(_) => ExecuteResult::Ok("Table created successfully".into()),
         Err(e) => ExecuteResult::Error(e),
     };
@@ -138,33 +133,28 @@ async fn create_table(
     map_response(result)
 }
 
-
 async fn list_table(
     State(state): State<AppState>,
 ) -> Json<Vec<Table>> {
-    let engine = state.engine.lock().unwrap();
-
+    let engine = state.engine.lock().await;
     Json(engine.get_tables())
 }
-
 
 async fn drop_table(
     Path(table_name): Path<String>,
     State(state): State<AppState>,
 ) -> Json<ApiResponse> {
-    let mut engine = state.engine.lock().unwrap();
+    let mut engine = state.engine.lock().await;
 
-    let result = match engine.drop_table(&table_name) {
+    let result = match engine.drop_table(&table_name).await {
         Ok(_) => {
             ExecuteResult::Ok(format!("Table '{}' deleted", table_name))
         }
-
         Err(e) => ExecuteResult::Error(e),
     };
 
     map_response(result)
 }
-
 
 async fn insert_row(
     Path(table_name): Path<String>,
@@ -187,9 +177,9 @@ async fn insert_row(
         data,
     };
 
-    let mut engine = state.engine.lock().unwrap();
+    let mut engine = state.engine.lock().await;
 
-    let result = match engine.insert(&entity) {
+    let result = match engine.insert(&entity).await {
         Ok(_) => ExecuteResult::Ok("Row inserted".into()),
         Err(e) => ExecuteResult::Error(e),
     };
@@ -197,25 +187,23 @@ async fn insert_row(
     map_response(result)
 }
 
-
 async fn select_rows(
     Path(table_name): Path<String>,
     State(state): State<AppState>,
 ) -> Json<ApiResponse> {
-    let mut engine = state.engine.lock().unwrap();
+    let mut engine = state.engine.lock().await;
 
     let result = match engine.select(
         &table_name,
         vec!["*"],
         vec![],
-    ) {
+    ).await {
         Ok(rows) => ExecuteResult::Rows(rows),
         Err(e) => ExecuteResult::Error(e),
     };
 
     map_response(result)
 }
-
 
 async fn update_row(
     Path(table_name): Path<String>,
@@ -232,7 +220,6 @@ async fn update_row(
 
         updates.push(Data { name, value });
     }
-
 
     let mut conditions = Vec::new();
 
@@ -251,26 +238,23 @@ async fn update_row(
         );
     }
 
-
-    let mut engine = state.engine.lock().unwrap();
+    let mut engine = state.engine.lock().await;
 
     let result = match engine.update(
         &table_name,
         updates,
         conditions,
-    ) {
+    ).await {
         Ok(count) => {
             ExecuteResult::Ok(
                 format!("{} row(s) updated", count)
             )
         }
-
         Err(e) => ExecuteResult::Error(e),
     };
 
     map_response(result)
 }
-
 
 async fn delete_row(
     Path(table_name): Path<String>,
@@ -294,25 +278,22 @@ async fn delete_row(
         );
     }
 
-
-    let mut engine = state.engine.lock().unwrap();
+    let mut engine = state.engine.lock().await;
 
     let result = match engine.delete(
         &table_name,
         conditions,
-    ) {
+    ).await {
         Ok(count) => {
             ExecuteResult::Ok(
                 format!("{} row(s) deleted", count)
             )
         }
-
         Err(e) => ExecuteResult::Error(e),
     };
 
     map_response(result)
 }
-
 
 fn json_to_db_value(value: JsonValue) -> Result<Value, String> {
     match value {
@@ -322,30 +303,25 @@ fn json_to_db_value(value: JsonValue) -> Result<Value, String> {
                 None => Err("Invalid integer".into()),
             }
         }
-
         JsonValue::String(s) => {
             Ok(Value::VarChar(s))
         }
-
         _ => Err("Unsupported data format".into()),
     }
 }
 
-
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+    
+    let engine = Engine::new().await;
+    
     let state = AppState {
-        engine: Arc::new(
-            Mutex::new(Engine::new())
-        ),
+        engine: Arc::new(Mutex::new(engine)),
     };
 
     // Extract port from args
-    let mut port = 0;
-    if let Some(p) = args.port {
-        port = p;
-    }
+    let port = args.port.unwrap_or(8080);
 
     let app = Router::new()
         .route("/", get(health))
@@ -367,14 +343,17 @@ async fn main() {
         )
         .with_state(state);
 
-    let ip = get_local_ip().unwrap();
+    let ip = get_local_ip().unwrap_or_else(|_| {
+        "127.0.0.1".parse().unwrap()
+    });
 
     let listener = TcpListener::bind(
         format!("{}:{}", ip, port)
     ).await.unwrap();
+    
     let bound_port = listener.local_addr().unwrap().port();
     let full_ip = format!("{}:{}", ip, bound_port);
-    println!("DB Service running at {}", full_ip);
+    println!("DB Service running at http://{}", full_ip);
 
     axum::serve(listener, app)
         .await

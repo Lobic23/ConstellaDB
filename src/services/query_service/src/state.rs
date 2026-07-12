@@ -1,5 +1,6 @@
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use db_module::Engine;
-use std::sync::{Arc, Mutex};
 
 pub struct AppState {
     pub engine: Arc<Mutex<Engine>>,

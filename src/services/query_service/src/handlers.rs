@@ -32,10 +32,8 @@ pub async fn handle_query(
         }
     };
 
-    let result = {
-        let mut engine = state.engine.lock().unwrap();
-        execute(&mut engine, cmd)
-    };
+    let mut engine = state.engine.lock().await;
+    let result = execute(&mut engine, cmd).await;
 
     match result {
         ExecuteResult::Ok(msg) => (
