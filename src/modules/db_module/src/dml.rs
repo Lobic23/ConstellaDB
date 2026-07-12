@@ -1,12 +1,12 @@
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::PathBuf;
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
 
 use crate::engine::Engine;
 use crate::types::{Condition, DB_DIR, Data, Entity, Type, Value};
 
 impl Engine {
-  pub fn insert(&mut self, entity: &Entity) -> Result<(), String> {
+  pub async fn insert(&mut self, entity: &Entity) -> Result<(), String> {
     let table = self
       .get_table(&entity.of)
       .ok_or_else(|| format!("Table '{}' doesn't exist", entity.of))?
@@ -26,6 +26,7 @@ impl Engine {
         .create(true)
         .append(true)
         .open(path.to_str().unwrap())
+        .await
         .unwrap();
 
       // Store the byte
@@ -37,22 +38,24 @@ impl Engine {
             Type::Int => 4,
             Type::VarChar(size) => *size,
           };
-          file.write_all(&[0u8]).map_err(|e| e.to_string())?;
+          file.write_all(&[0u8]).await.map_err(|e| e.to_string())?;
           file
             .write_all(&vec![0u8; payload_size])
+            .await
             .map_err(|e| e.to_string())?;
         }
         (Type::Int, Value::Int(v)) => {
-          file.write_all(&[1u8]).map_err(|e| e.to_string())?;
+          file.write_all(&[1u8]).await.map_err(|e| e.to_string())?;
           file
             .write_all(&v.to_le_bytes())
+            .await
             .map_err(|e| e.to_string())?;
         }
         (Type::VarChar(size), Value::VarChar(v)) => {
-          file.write_all(&[1u8]).map_err(|e| e.to_string())?;
+          file.write_all(&[1u8]).await.map_err(|e| e.to_string())?;
           let mut bytes = v.as_bytes().to_vec();
           bytes.resize(*size, 0);
-          file.write_all(&bytes).map_err(|e| e.to_string())?;
+          file.write_all(&bytes).await.map_err(|e| e.to_string())?;
         }
         _ => return Err("Unreachable!".to_string()),
       }
@@ -61,7 +64,7 @@ impl Engine {
     Ok(())
   }
 
-  pub fn select(
+  pub async fn select(
     &mut self,
     table_name: &str,
     attrs: Vec<&str>,
@@ -89,7 +92,7 @@ impl Engine {
     // Load all the columns
     let mut columns: Vec<Vec<Value>> = Vec::new();
     for attr in &table.attrs {
-      columns.push(self.load_column(table, attr)?);
+      columns.push(self.load_column(table, attr).await?);
     }
 
     // If no columns were fetched then return empty
@@ -128,7 +131,11 @@ impl Engine {
     Ok(result)
   }
 
-  pub fn delete(&mut self, table_name: &str, conditions: Vec<Condition>) -> Result<usize, String> {
+  pub async fn delete(
+    &mut self,
+    table_name: &str,
+    conditions: Vec<Condition>,
+  ) -> Result<usize, String> {
     let table = match self.get_table(table_name) {
       Some(t) => t,
       None => return Err(format!("Table with name '{}' doesn't exists", table_name)),
@@ -136,7 +143,7 @@ impl Engine {
 
     let mut columns = Vec::new();
     for attr in &table.attrs {
-      columns.push(self.load_column(&table, attr)?);
+      columns.push(self.load_column(&table, attr).await?);
     }
 
     if columns.is_empty() {
@@ -167,13 +174,13 @@ impl Engine {
 
     // Write the new column
     for (idx, attr) in table.attrs.iter().enumerate() {
-      self.write_column(&table, attr, &new_columns[idx])?;
+      self.write_column(&table, attr, &new_columns[idx]).await?;
     }
 
     Ok(deleted)
   }
 
-  pub fn update(
+  pub async fn update(
     &mut self,
     table_name: &str,
     updates: Vec<Data>,
@@ -186,7 +193,7 @@ impl Engine {
 
     let mut columns = Vec::new();
     for attr in &table.attrs {
-      columns.push(self.load_column(&table, attr)?);
+      columns.push(self.load_column(&table, attr).await?);
     }
 
     if columns.is_empty() {
@@ -205,6 +212,7 @@ impl Engine {
 
       updated += 1;
       for update in &updates {
+
         // Calculate the index of the column
         let col_idx = table
           .attrs
@@ -219,7 +227,7 @@ impl Engine {
 
     // Write the columns again
     for (idx, attr) in table.attrs.iter().enumerate() {
-      self.write_column(&table, attr, &columns[idx])?;
+      self.write_column(&table, attr, &columns[idx]).await?;
     }
 
     Ok(updated)

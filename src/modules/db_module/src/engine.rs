@@ -1,5 +1,5 @@
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufWriter, Read, Write};
+use tokio::fs::{self, File, OpenOptions};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::path::{Path, PathBuf};
 
 use crate::types::{
@@ -11,21 +11,21 @@ pub struct Engine {
 }
 
 impl Engine {
-  pub fn new() -> Self {
+  pub async fn new() -> Self {
     let db_dir = Path::new(DB_DIR);
 
-    if !db_dir.exists() {
-      fs::create_dir_all(db_dir).unwrap();
+    if !fs::try_exists(db_dir).await.unwrap_or(false) {
+      fs::create_dir_all(db_dir).await.unwrap();
     }
 
     let schema_path = db_dir.join(SCHEMA_FILE);
 
-    if !schema_path.exists() {
-      fs::write(&schema_path, b"[]").unwrap();
+    if !fs::try_exists(&schema_path).await.unwrap_or(false) {
+      fs::write(&schema_path, b"[]").await.unwrap();
     }
 
     Self {
-      tables: Self::load_schema(),
+      tables: Self::load_schema().await,
     }
   }
 
@@ -33,31 +33,31 @@ impl Engine {
     self.tables.clone()
   }
 
-  pub(crate) fn save_schema(&self) {
-    let file = File::create(PathBuf::from(DB_DIR).join(SCHEMA_FILE).to_str().unwrap()).unwrap();
-
-    let writer = BufWriter::new(file);
-    serde_json::to_writer_pretty(writer, &self.tables).unwrap();
+  pub(crate) async fn save_schema(&self) {
+    let path = PathBuf::from(DB_DIR).join(SCHEMA_FILE);
+    // serde_json needs a sync Write; serialize to bytes first, then write async.
+    let bytes = serde_json::to_vec_pretty(&self.tables).unwrap();
+    fs::write(path, bytes).await.unwrap();
   }
 
-  fn load_schema() -> Vec<Table> {
+  async fn load_schema() -> Vec<Table> {
     let path = PathBuf::from(DB_DIR).join(SCHEMA_FILE);
 
     // Create the file if it doesn't exist.
-    if !path.exists() {
-      let _ = fs::write(&path, b"[]");
+    if !fs::try_exists(&path).await.unwrap_or(false) {
+      let _ = fs::write(&path, b"[]").await;
       return Vec::new();
     }
 
     // Read the contents.
-    let contents = match fs::read_to_string(&path) {
+    let contents = match fs::read_to_string(&path).await {
       Ok(c) => c,
       Err(_) => return Vec::new(),
     };
 
     // Empty file -> initialize with an empty schema.
     if contents.trim().is_empty() {
-      let _ = fs::write(&path, b"[]");
+      let _ = fs::write(&path, b"[]").await;
       return Vec::new();
     }
 
@@ -111,7 +111,7 @@ impl Engine {
     Ok(())
   }
 
-  pub(crate) fn load_column(&self, table: &Table, attr: &Attr) -> Result<Vec<Value>, String> {
+   pub(crate) async fn load_column(&self, table: &Table, attr: &Attr) -> Result<Vec<Value>, String> {
     if !self.table_exists(&table.name) {
       return Err(format!("Table with name '{}' doesn't exist", table.name));
     }
@@ -127,15 +127,15 @@ impl Engine {
       .join(&table.name)
       .join(format!("{}.col", &attr.name));
 
-    let mut file = File::open(path).map_err(|e| e.to_string())?;
+    let mut file = File::open(path).await.map_err(|e| e.to_string())?;
     let mut values: Vec<Value> = Vec::new();
     let mut flag = [0u8; 1];
 
     match attr.data_type {
       Type::Int => {
         let mut buff = [0u8; 4];
-        while file.read_exact(&mut flag).is_ok() {
-          file.read_exact(&mut buff).map_err(|e| e.to_string())?;
+        while file.read_exact(&mut flag).await.is_ok() {
+          file.read_exact(&mut buff).await.map_err(|e| e.to_string())?;
           values.push(if flag[0] == 0 {
             Value::Null
           } else {
@@ -146,8 +146,8 @@ impl Engine {
 
       Type::VarChar(size) => {
         let mut buff = vec![0u8; size];
-        while file.read_exact(&mut flag).is_ok() {
-          file.read_exact(&mut buff).map_err(|e| e.to_string())?;
+        while file.read_exact(&mut flag).await.is_ok() {
+          file.read_exact(&mut buff).await.map_err(|e| e.to_string())?;
           values.push(if flag[0] == 0 {
             Value::Null
           } else {
@@ -163,7 +163,8 @@ impl Engine {
     Ok(values)
   }
 
-  pub(crate) fn write_column(
+
+   pub(crate) async fn write_column(
     &self,
     table: &Table,
     attr: &Attr,
@@ -177,6 +178,7 @@ impl Engine {
       .write(true)
       .truncate(true)
       .open(path)
+      .await
       .map_err(|e| e.to_string())?;
 
     for value in values {
@@ -185,25 +187,27 @@ impl Engine {
           Type::Int => 4,
           Type::VarChar(size) => *size,
         };
-        file.write_all(&[0u8]).map_err(|e| e.to_string())?;
+        file.write_all(&[0u8]).await.map_err(|e| e.to_string())?;
         file
           .write_all(&vec![0u8; payload_size])
+          .await
           .map_err(|e| e.to_string())?;
         continue;
       }
 
       match (&attr.data_type, value) {
         (Type::Int, Value::Int(v)) => {
-          file.write_all(&[1u8]).map_err(|e| e.to_string())?;
+          file.write_all(&[1u8]).await.map_err(|e| e.to_string())?;
           file
             .write_all(&v.to_le_bytes())
+            .await
             .map_err(|e| e.to_string())?;
         }
         (Type::VarChar(size), Value::VarChar(v)) => {
-          file.write_all(&[1u8]).map_err(|e| e.to_string())?;
+          file.write_all(&[1u8]).await.map_err(|e| e.to_string())?;
           let mut bytes = v.as_bytes().to_vec();
           bytes.resize(*size, 0);
-          file.write_all(&bytes).map_err(|e| e.to_string())?;
+          file.write_all(&bytes).await.map_err(|e| e.to_string())?;
         }
         _ => return Err("Type mismatch while writing column".into()),
       }
