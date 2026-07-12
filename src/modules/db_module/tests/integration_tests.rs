@@ -13,10 +13,10 @@ mod tests {
   /// Builds a fresh engine with `user_table` already created and populated
   /// with 10 rows (id 0–9).  The table is dropped first so tests that call
   /// this are hermetic even when the DB directory is shared on disk.
-  fn setup_user_table() -> Engine {
-    let mut engine = Engine::new();
+  async fn setup_user_table() -> Engine {
+    let mut engine = Engine::new().await;
 
-    let _ = engine.drop_table("user_table");
+    let _ = engine.drop_table("user_table").await;
 
     let user_table = Table {
       name: "user_table".to_string(),
@@ -36,7 +36,7 @@ mod tests {
       ],
     };
 
-    engine.create_table(&user_table).unwrap();
+    engine.create_table(&user_table).await.unwrap();
 
     for i in 0..10_i32 {
       engine
@@ -57,6 +57,7 @@ mod tests {
             },
           ],
         })
+        .await
         .unwrap();
     }
 
@@ -67,10 +68,10 @@ mod tests {
   // DDL
   // -------------------------------------------------------------------------
 
-  #[test]
-  fn create_table_succeeds() {
-    let mut engine = Engine::new();
-    let _ = engine.drop_table("ddl_test");
+  #[tokio::test]
+  async fn create_table_succeeds() {
+    let mut engine = Engine::new().await;
+    let _ = engine.drop_table("ddl_test").await;
 
     let table = Table {
       name: "ddl_test".to_string(),
@@ -80,16 +81,16 @@ mod tests {
       }],
     };
 
-    assert!(engine.create_table(&table).is_ok());
-    assert!(engine.select("ddl_test", vec!["*"], vec![]).is_ok());
+    assert!(engine.create_table(&table).await.is_ok());
+    assert!(engine.select("ddl_test", vec!["*"], vec![]).await.is_ok());
 
-    let _ = engine.drop_table("ddl_test");
+    let _ = engine.drop_table("ddl_test").await;
   }
 
-  #[test]
-  fn create_table_duplicate_errors() {
-    let mut engine = Engine::new();
-    let _ = engine.drop_table("dup_test");
+  #[tokio::test]
+  async fn create_table_duplicate_errors() {
+    let mut engine = Engine::new().await;
+    let _ = engine.drop_table("dup_test").await;
 
     let table = Table {
       name: "dup_test".to_string(),
@@ -99,18 +100,18 @@ mod tests {
       }],
     };
 
-    engine.create_table(&table).unwrap();
-    let result = engine.create_table(&table);
+    engine.create_table(&table).await.unwrap();
+    let result = engine.create_table(&table).await;
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("already exists"));
 
-    let _ = engine.drop_table("dup_test");
+    let _ = engine.drop_table("dup_test").await;
   }
 
-  #[test]
-  fn drop_table_succeeds() {
-    let mut engine = Engine::new();
-    let _ = engine.drop_table("drop_test");
+  #[tokio::test]
+  async fn drop_table_succeeds() {
+    let mut engine = Engine::new().await;
+    let _ = engine.drop_table("drop_test").await;
 
     let table = Table {
       name: "drop_test".to_string(),
@@ -120,15 +121,15 @@ mod tests {
       }],
     };
 
-    engine.create_table(&table).unwrap();
-    assert!(engine.drop_table("drop_test").is_ok());
-    assert!(engine.select("drop_test", vec!["*"], vec![]).is_err());
+    engine.create_table(&table).await.unwrap();
+    assert!(engine.drop_table("drop_test").await.is_ok());
+    assert!(engine.select("drop_test", vec!["*"], vec![]).await.is_err());
   }
 
-  #[test]
-  fn drop_nonexistent_table_errors() {
-    let mut engine = Engine::new();
-    let result = engine.drop_table("no_such_table");
+  #[tokio::test]
+  async fn drop_nonexistent_table_errors() {
+    let mut engine = Engine::new().await;
+    let result = engine.drop_table("no_such_table").await;
     assert!(result.is_err());
   }
 
@@ -136,9 +137,9 @@ mod tests {
   // ALTER TABLE — add / drop / rename column
   // -------------------------------------------------------------------------
 
-  #[test]
-  fn alter_add_column_succeeds() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn alter_add_column_succeeds() {
+    let mut engine = setup_user_table().await;
 
     let result = engine.alter_table(
       "user_table",
@@ -146,17 +147,17 @@ mod tests {
         name: "email".to_string(),
         data_type: Type::VarChar(255),
       }),
-    );
+    ).await;
 
     assert!(result.is_ok(), "{:?}", result);
 
-    let rows = engine.select("user_table", vec!["email"], vec![]);
+    let rows = engine.select("user_table", vec!["email"], vec![]).await;
     assert!(rows.is_ok());
   }
 
-  #[test]
-  fn alter_add_duplicate_column_errors() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn alter_add_duplicate_column_errors() {
+    let mut engine = setup_user_table().await;
 
     let result = engine.alter_table(
       "user_table",
@@ -164,40 +165,41 @@ mod tests {
         name: "id".to_string(),
         data_type: Type::Int,
       }),
-    );
+    ).await;
 
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("already exists"));
   }
 
-  #[test]
-  fn alter_drop_column_succeeds() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn alter_drop_column_succeeds() {
+    let mut engine = setup_user_table().await;
 
-    let result = engine.alter_table("user_table", AlterOp::DropColumn("password".to_string()));
+    let result = engine.alter_table("user_table", AlterOp::DropColumn("password".to_string())).await;
 
     assert!(result.is_ok(), "{:?}", result);
 
     assert!(
       engine
         .select("user_table", vec!["password"], vec![])
+        .await
         .is_err()
     );
   }
 
-  #[test]
-  fn alter_drop_nonexistent_column_errors() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn alter_drop_nonexistent_column_errors() {
+    let mut engine = setup_user_table().await;
 
-    let result = engine.alter_table("user_table", AlterOp::DropColumn("no_col".to_string()));
+    let result = engine.alter_table("user_table", AlterOp::DropColumn("no_col".to_string())).await;
 
     assert!(result.is_err());
   }
 
-  #[test]
-  fn alter_drop_last_column_errors() {
-    let mut engine = Engine::new();
-    let _ = engine.drop_table("single_col");
+  #[tokio::test]
+  async fn alter_drop_last_column_errors() {
+    let mut engine = Engine::new().await;
+    let _ = engine.drop_table("single_col").await;
 
     let table = Table {
       name: "single_col".to_string(),
@@ -206,19 +208,19 @@ mod tests {
         data_type: Type::Int,
       }],
     };
-    engine.create_table(&table).unwrap();
+    engine.create_table(&table).await.unwrap();
 
-    let result = engine.alter_table("single_col", AlterOp::DropColumn("only".to_string()));
+    let result = engine.alter_table("single_col", AlterOp::DropColumn("only".to_string())).await;
 
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("drop the table instead"));
 
-    let _ = engine.drop_table("single_col");
+    let _ = engine.drop_table("single_col").await;
   }
 
-  #[test]
-  fn alter_rename_column_succeeds() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn alter_rename_column_succeeds() {
+    let mut engine = setup_user_table().await;
 
     let result = engine.alter_table(
       "user_table",
@@ -226,21 +228,22 @@ mod tests {
         from: "password".to_string(),
         to: "passwd".to_string(),
       },
-    );
+    ).await;
 
     assert!(result.is_ok(), "{:?}", result);
 
-    assert!(engine.select("user_table", vec!["passwd"], vec![]).is_ok());
+    assert!(engine.select("user_table", vec!["passwd"], vec![]).await.is_ok());
     assert!(
       engine
         .select("user_table", vec!["password"], vec![])
+        .await
         .is_err()
     );
   }
 
-  #[test]
-  fn alter_rename_to_existing_column_errors() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn alter_rename_to_existing_column_errors() {
+    let mut engine = setup_user_table().await;
 
     let result = engine.alter_table(
       "user_table",
@@ -248,7 +251,7 @@ mod tests {
         from: "name".to_string(),
         to: "id".to_string(), // already exists
       },
-    );
+    ).await;
 
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("already exists"));
@@ -258,9 +261,9 @@ mod tests {
   // ALTER TABLE — modify_column_type (uses cast_value, not v.cast_to)
   // -------------------------------------------------------------------------
 
-  #[test]
-  fn modify_column_type_int_to_varchar() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn modify_column_type_int_to_varchar() {
+    let mut engine = setup_user_table().await;
 
     // Cast the Int `id` column to VarChar
     let result = engine.alter_table(
@@ -269,11 +272,11 @@ mod tests {
         name: "id".to_string(),
         new_type: Type::VarChar(20),
       },
-    );
+    ).await;
 
     assert!(result.is_ok(), "{:?}", result);
 
-    let rows = engine.select("user_table", vec!["id"], vec![]).unwrap();
+    let rows = engine.select("user_table", vec!["id"], vec![]).await.unwrap();
 
     for row in &rows {
       let id_val = row.data.iter().find(|d| d.name == "id").unwrap();
@@ -285,9 +288,9 @@ mod tests {
     }
   }
 
-  #[test]
-  fn modify_column_type_varchar_to_varchar_wider() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn modify_column_type_varchar_to_varchar_wider() {
+    let mut engine = setup_user_table().await;
 
     // Widen the `name` column from VarChar(100) to VarChar(255)
     let result = engine.alter_table(
@@ -296,17 +299,17 @@ mod tests {
         name: "name".to_string(),
         new_type: Type::VarChar(255),
       },
-    );
+    ).await;
 
     assert!(result.is_ok(), "{:?}", result);
 
     // Verify the column is still selectable after the type change
-    assert!(engine.select("user_table", vec!["name"], vec![]).is_ok());
+    assert!(engine.select("user_table", vec!["name"], vec![]).await.is_ok());
   }
 
-  #[test]
-  fn modify_column_type_nonexistent_column_errors() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn modify_column_type_nonexistent_column_errors() {
+    let mut engine = setup_user_table().await;
 
     let result = engine.alter_table(
       "user_table",
@@ -314,15 +317,15 @@ mod tests {
         name: "ghost".to_string(),
         new_type: Type::Int,
       },
-    );
+    ).await;
 
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("doesn't exist"));
   }
 
-  #[test]
-  fn modify_column_type_nonexistent_table_errors() {
-    let mut engine = Engine::new();
+  #[tokio::test]
+  async fn modify_column_type_nonexistent_table_errors() {
+    let mut engine = Engine::new().await;
 
     let result = engine.alter_table(
       "no_such_table",
@@ -330,7 +333,7 @@ mod tests {
         name: "id".to_string(),
         new_type: Type::VarChar(10),
       },
-    );
+    ).await;
 
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("doesn't exist"));
@@ -340,10 +343,10 @@ mod tests {
   // INSERT
   // -------------------------------------------------------------------------
 
-  #[test]
-  fn insert_ten_rows() {
-    let mut engine = setup_user_table();
-    let rows = engine.select("user_table", vec!["*"], vec![]).unwrap();
+  #[tokio::test]
+  async fn insert_ten_rows() {
+    let mut engine = setup_user_table().await;
+    let rows = engine.select("user_table", vec!["*"], vec![]).await.unwrap();
     assert_eq!(rows.len(), 10);
   }
 
@@ -351,16 +354,16 @@ mod tests {
   // SELECT
   // -------------------------------------------------------------------------
 
-  #[test]
-  fn select_all_returns_all_rows() {
-    let mut engine = setup_user_table();
-    let rows = engine.select("user_table", vec!["*"], vec![]).unwrap();
+  #[tokio::test]
+  async fn select_all_returns_all_rows() {
+    let mut engine = setup_user_table().await;
+    let rows = engine.select("user_table", vec!["*"], vec![]).await.unwrap();
     assert_eq!(rows.len(), 10);
   }
 
-  #[test]
-  fn select_with_eq_condition() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn select_with_eq_condition() {
+    let mut engine = setup_user_table().await;
     let rows = engine
       .select(
         "user_table",
@@ -371,6 +374,7 @@ mod tests {
           op: Operator::Eq,
         }],
       )
+      .await
       .unwrap();
 
     assert_eq!(rows.len(), 1);
@@ -378,9 +382,9 @@ mod tests {
     assert!(matches!(id.value, Value::Int(5)));
   }
 
-  #[test]
-  fn select_with_and_condition() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn select_with_and_condition() {
+    let mut engine = setup_user_table().await;
     // id > 3 AND id < 7  →  ids 4, 5, 6
     let rows = engine
       .select(
@@ -399,6 +403,7 @@ mod tests {
           }),
         )],
       )
+      .await
       .unwrap();
 
     assert_eq!(rows.len(), 3);
@@ -415,9 +420,9 @@ mod tests {
     assert_eq!(ids, vec![4, 5, 6]);
   }
 
-  #[test]
-  fn select_with_or_condition() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn select_with_or_condition() {
+    let mut engine = setup_user_table().await;
     // id = 4 OR id = 8
     let rows = engine
       .select(
@@ -436,6 +441,7 @@ mod tests {
           }),
         )],
       )
+      .await
       .unwrap();
 
     assert_eq!(rows.len(), 2);
@@ -457,9 +463,9 @@ mod tests {
   // UPDATE
   // -------------------------------------------------------------------------
 
-  #[test]
-  fn update_single_row() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn update_single_row() {
+    let mut engine = setup_user_table().await;
 
     engine
       .update(
@@ -474,6 +480,7 @@ mod tests {
           op: Operator::Eq,
         }],
       )
+      .await
       .unwrap();
 
     let rows = engine
@@ -486,6 +493,7 @@ mod tests {
           op: Operator::Eq,
         }],
       )
+      .await
       .unwrap();
 
     assert_eq!(rows.len(), 1);
@@ -497,9 +505,9 @@ mod tests {
   // DELETE
   // -------------------------------------------------------------------------
 
-  #[test]
-  fn delete_rows_with_lt_condition() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn delete_rows_with_lt_condition() {
+    let mut engine = setup_user_table().await;
 
     // Delete id < 3  →  removes ids 0, 1, 2  →  7 rows remain
     engine
@@ -511,10 +519,12 @@ mod tests {
           op: Operator::Lt,
         }],
       )
+      .await
       .unwrap();
 
     let rows = engine
       .select("user_table", vec!["id", "name"], vec![])
+      .await
       .unwrap();
 
     assert_eq!(rows.len(), 7);
@@ -539,9 +549,9 @@ mod tests {
   // NULL
   // -------------------------------------------------------------------------
 
-  #[test]
-  fn insert_null_value() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn insert_null_value() {
+    let mut engine = setup_user_table().await;
 
     engine
       .insert(&Entity {
@@ -561,6 +571,7 @@ mod tests {
           },
         ],
       })
+      .await
       .unwrap();
 
     let rows = engine
@@ -573,6 +584,7 @@ mod tests {
           op: Operator::Eq,
         }],
       )
+      .await
       .unwrap();
 
     assert_eq!(rows.len(), 1);
@@ -582,9 +594,9 @@ mod tests {
     assert!(matches!(password.value, Value::Null));
   }
 
-  #[test]
-  fn null_does_not_match_conditions() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn null_does_not_match_conditions() {
+    let mut engine = setup_user_table().await;
 
     engine
       .insert(&Entity {
@@ -604,6 +616,7 @@ mod tests {
           },
         ],
       })
+      .await
       .unwrap();
 
     // NULL = NULL should not match
@@ -617,14 +630,15 @@ mod tests {
           op: Operator::Eq,
         }],
       )
+      .await
       .unwrap();
 
     assert_eq!(rows.len(), 0);
   }
 
-  #[test]
-  fn update_to_null() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn update_to_null() {
+    let mut engine = setup_user_table().await;
 
     engine
       .update(
@@ -639,6 +653,7 @@ mod tests {
           op: Operator::Eq,
         }],
       )
+      .await
       .unwrap();
 
     let rows = engine
@@ -651,6 +666,7 @@ mod tests {
           op: Operator::Eq,
         }],
       )
+      .await
       .unwrap();
 
     assert_eq!(rows.len(), 1);
@@ -658,9 +674,9 @@ mod tests {
     assert!(matches!(name.value, Value::Null));
   }
 
-  #[test]
-  fn add_column_fills_null_for_existing_rows() {
-    let mut engine = setup_user_table();
+  #[tokio::test]
+  async fn add_column_fills_null_for_existing_rows() {
+    let mut engine = setup_user_table().await;
 
     engine
       .alter_table(
@@ -670,9 +686,10 @@ mod tests {
           data_type: Type::VarChar(255),
         }),
       )
+      .await
       .unwrap();
 
-    let rows = engine.select("user_table", vec!["email"], vec![]).unwrap();
+    let rows = engine.select("user_table", vec!["email"], vec![]).await.unwrap();
 
     assert_eq!(rows.len(), 10);
     for row in &rows {
