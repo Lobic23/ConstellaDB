@@ -101,7 +101,7 @@ async fn handle_client_connection(
           Err(e) => {
             let mut response = Message::new(
               "".to_string(),
-              MessageType::Response,
+              MessageType::Response{sucess: true, message: None, data: None},
               "".to_string()
             );
             response = response.with_payload(e.to_string().into_bytes());
@@ -183,7 +183,7 @@ async fn handle_node_connection(
         }
       },
 
-      MessageType::Response => {
+      MessageType::Response {..} => {
         let mut s = state.lock().await;
         if let Some(writer_mutex) = s.requests.get(&msg.id) {
           let mut writer = writer_mutex.lock().await;

@@ -1,7 +1,26 @@
 use std::io::{self, Write};
-use constella_db::modules::protocol::{BincodeSerializer, Message, MessageType, ProtocolHandler};
+use constella_db::modules::protocol::{
+  BincodeSerializer, ResponseData, Message, MessageType, ProtocolHandler
+};
+use constella_db::modules::db::Entity;
 use tokio::net::TcpStream;
 use uuid::Uuid;
+
+pub fn format_rows(rows: Vec<Entity>) -> String {
+  if rows.is_empty() {
+    return "OK: 0 row(s)".to_string();
+  }
+  let mut out = format!("OK: {} row(s)\n", rows.len());
+  for row in &rows {
+    let fields: Vec<String> = row
+      .data
+      .iter()
+      .map(|d| format!("{}={:?}", d.name, d.value))
+      .collect();
+    out.push_str(&format!("  {}\n", fields.join(", ")));
+  }
+  out.trim_end().to_string()
+}
 
 #[tokio::main]
 async fn main() {
@@ -49,10 +68,43 @@ async fn main() {
     }
 
     match handler.receive().await {
-      Ok(resp) => println!("{}", String::from_utf8_lossy(&resp.payload)),
+      Ok(resp) => {
+        match resp.msg_type {
+          MessageType::Response {
+            sucess,
+            message,
+            data,
+          } => {
+            println!("Success: {}", sucess);
+
+            if let Some(msg) = message {
+              println!("{}", msg);
+            }
+
+            if let Some(data) = data {
+              match data {
+                ResponseData::Rows(rows) => {
+                  let res = format_rows(rows);
+                  println!("{}", res);
+                }
+                ResponseData::Tables(tables) => {
+                  println!("Tables:");
+                  for table in tables {
+                    println!("  {}", table);
+                  }
+                }
+              }
+            }
+          }
+          _ => {
+            eprintln!("Expected Response");
+          }
+        }
+      }
+
       Err(e) => {
-        eprintln!("recv error: {e}");
-        break;
+          eprintln!("recv error: {e}");
+          break;
       }
     }
   }

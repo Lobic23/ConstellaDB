@@ -12,7 +12,7 @@ pub enum AlterOp {
 }
 
 impl Engine {
-  pub async fn create_table(&mut self, table: &Table) -> Result<(), String> {
+  pub async fn create_table(&mut self, table: &Table) -> Result<String, String> {
     if self.table_exists(&table.name) {
       return Err(format!("Table with name '{}' already exists", table.name));
     }
@@ -27,7 +27,7 @@ impl Engine {
     // Create attribute files
     for attr in table.attrs.iter() {
       let attr_file_path = table_dir_path.clone().join(format!("{}.col", attr.name));
-      
+
       File::create(attr_file_path.to_str().unwrap())
         .await
         .unwrap();
@@ -39,7 +39,7 @@ impl Engine {
     // Save the schema
     self.save_schema().await;
 
-    Ok(())
+    Ok(format!("Table '{}' created sucessfully!", &table.name))
   }
 
   pub async fn list_tables(&self) -> Result<Vec<String>, String> {
@@ -49,7 +49,7 @@ impl Engine {
     Ok(self.tables.iter().map(|table| table.name.clone()).collect())
   }
 
-  pub async fn drop_table(&mut self, table_name: &str) -> Result<(), String> {
+  pub async fn drop_table(&mut self, table_name: &str) -> Result<String, String> {
     if !self.table_exists(table_name) {
       return Err(format!("Table with name '{}' doesnt exists", table_name));
     }
@@ -62,7 +62,7 @@ impl Engine {
     self.tables.retain(|t| t.name != table_name);
     self.save_schema().await;
 
-    Ok(())
+    Ok(format!("Sucessfully droped table '{}'.", table_name))
   }
 
   pub async fn alter_table(&mut self, table_name: &str, op: AlterOp) -> Result<(), String> {

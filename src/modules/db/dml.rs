@@ -6,7 +6,7 @@ use crate::modules::db::engine::Engine;
 use crate::modules::db::types::{Condition, DB_DIR, Data, Entity, Type, Value};
 
 impl Engine {
-  pub async fn insert(&mut self, entity: &Entity) -> Result<(), String> {
+  pub async fn insert(&mut self, entity: &Entity) -> Result<String, String> {
     let table = self
       .get_table(&entity.of)
       .ok_or_else(|| format!("Table '{}' doesn't exist", entity.of))?
@@ -61,7 +61,7 @@ impl Engine {
       }
     }
 
-    Ok(())
+    Ok("Sucessfully inserted 1 Row".to_string())
   }
 
   pub async fn select(

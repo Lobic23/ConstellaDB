@@ -3,10 +3,9 @@ use std::collections::HashMap;
 use tokio::sync::Mutex;
 use tokio::net::TcpStream;
 
-use constella_db::modules::db::Entity;
 use constella_db::modules::protocol::{
   handler::{ReadHandler, WriteHandler},
-  message::Message,
+  message::{Message, ResponseData},
   serializer::BincodeSerializer,
 };
 
@@ -34,7 +33,7 @@ pub struct Instruction {
   >,
 
   pub response_message: Option<String>,
-  pub response_rows: Option<Vec<Entity>>,
+  pub response_data: Option<ResponseData>,
 }
 
 impl Instruction {
@@ -60,7 +59,7 @@ impl Instruction {
       followers: followers,
 
       response_message: None,
-      response_rows: None,
+      response_data: None,
     }
   }
 

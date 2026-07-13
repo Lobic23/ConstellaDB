@@ -3,5 +3,5 @@ pub mod message;
 pub mod serializer;
 
 pub use handler::ProtocolHandler;
-pub use message::{Message, MessageType};
+pub use message::{ResponseData, Message, MessageType};
 pub use serializer::{BincodeSerializer, Serializer};

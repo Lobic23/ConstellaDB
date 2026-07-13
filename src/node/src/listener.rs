@@ -5,11 +5,9 @@ use tokio::net::TcpListener;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use constella_db::modules::cmd::format_rows;
-use constella_db::modules::db::Entity;
 use constella_db::modules::protocol::{
   handler::{ReadHandler, WriteHandler},
-  message::{MessageType, Message},
+  message::{ResponseData, MessageType, Message},
   serializer::BincodeSerializer,
 };
 
@@ -92,11 +90,8 @@ pub async fn follower_message_handler(
     match &msg.msg_type {
 
       // Handles the response sent by the followers to the leader
-      MessageType::Response => {
-        println!("[LOG] Received Response:\n{:#?}", msg);
-
-        let payload = String::from_utf8(msg.payload).unwrap();
-        let payload_json: serde_json::Value = serde_json::from_str(&payload).unwrap();
+      MessageType::Response { sucess, message, data } => {
+        println!("[LOG] Received Response:\n{:#?}", &msg);
 
         // If the node is the leader then the response would be the result
         // back from the followers, so the data is collected here and checked
@@ -104,29 +99,45 @@ pub async fn follower_message_handler(
         // to the client
         sucess_instruction_response(&msg.id, &msg.node_id, node.clone()).await;
 
-        // If the rows are present in the response then append to the
-        // instructions response rows
-        if let Some(rows) = payload_json
-          .get("rows")
-          .cloned()
-          .and_then(|v| serde_json::from_value::<Vec<Entity>>(v).ok())
-        {
+        // If the rows/tables are present in the response then append to the
+        // instructions response data
+        if let Some(data) = data {
           let mut n = node.lock().await;
-
           if let Some(instruction) = n.instructions.get_mut(&msg.id) {
-            match &mut instruction.response_rows {
-              Some(existing_rows) => existing_rows.extend(rows),
-              None => instruction.response_rows = Some(rows),
+            match data {
+              ResponseData::Rows(rows) => {
+                match &mut instruction.response_data {
+                  Some(ResponseData::Rows(existing_rows)) => {
+                    existing_rows.extend(rows.clone());
+                  }
+                  Some(ResponseData::Tables(_)) => {
+                    // Unexpected response type
+                  }
+                  None => {
+                    instruction.response_data = Some(ResponseData::Rows(rows.to_vec()));
+                  }
+                }
+              }
+              ResponseData::Tables(tables) => {
+                match &mut instruction.response_data {
+                  Some(ResponseData::Tables(existing_tables)) => {
+                    existing_tables.extend(tables.clone());
+                  }
+                  Some(ResponseData::Rows(_)) => {
+                    // Unexpected response type
+                  }
+                  None => {
+                    instruction.response_data = Some(ResponseData::Tables(tables.to_vec()));
+                  }
+                }
+              }
             }
           }
         }
 
         // If a message is present in the response then save that to
         // the response message of the instruction
-        if let Some(message) = payload_json
-          .get("message")
-          .and_then(|v| v.as_str())
-        {
+        if let Some(message) = message {
           let mut n = node.lock().await;
           if let Some(instruction) = n.instructions.get_mut(&msg.id) {
             instruction.response_message = Some(message.to_string());
@@ -141,24 +152,45 @@ pub async fn follower_message_handler(
           // to the client
           let mut n = node.lock().await;
           if let Some(instruction) = n.instructions.get(&msg.id) {
-            let mut response = Message::new(
-              msg.id.clone(),
-              MessageType::Response,
-              n.id.clone()
-            );
 
             // If the instruction has a message then it is sent as
             // message have more priority (eg: errors)
-            if let Some(msg) = &instruction.response_message {
-              response = response.with_payload(msg.clone().into_bytes());
+            let response = if let Some(message) = &instruction.response_message {
+              Message::new(
+                msg.id.clone(),
+                MessageType::Response {
+                  sucess: *sucess,
+                  message: Some(message.to_string()),
+                  data: None,
+                },
+                n.id.clone()
+              )
             }
 
-            // If the instruction has rows (from select) then it is
-            // formated and returned to the user
-            else if let Some(rows) = &instruction.response_rows {
-              let rows_string = format_rows(rows.to_vec());
-              response = response.with_payload(rows_string.into_bytes());
+            // If the instruction has rows (from select) / tables (from show tables)
+            // then it is formated and returned to the user
+            else if let Some(data) = &instruction.response_data {
+              Message::new(
+                msg.id.clone(),
+                MessageType::Response {
+                  sucess: *sucess,
+                  message: None,
+                  data: Some(data.clone()),
+                },
+                n.id.clone()
+              )
             }
+            else {
+              Message::new(
+                msg.id.clone(),
+                MessageType::Response {
+                  sucess: *sucess,
+                  message: None,
+                  data: None,
+                },
+                n.id.clone()
+              )
+            };
 
             // Sending the response
             let mut handler = instruction.client_write_handler.lock().await;
@@ -220,13 +252,16 @@ pub async fn job_message_handler(
           if let Some(owner_write_handler) = n.instruction_owners.get(inst_id) {
             let mut handler = owner_write_handler.lock().await;
 
+            // This extracts the MessageType::Response
+            // Cuz JobComplete packs MessageType::Response in its payload
+            let response_data = MessageType::from_bytes(&msg.payload);
+
             // Sending the response to the leader
             let response = Message::new(
               inst_id.clone(),
-              MessageType::Response,
+              response_data,
               n.id.clone()
-            )
-              .with_payload(msg.payload.clone());
+            );
             handler.send(&response).await.unwrap();
           }
         }

@@ -1,30 +1,21 @@
-use axum::{
-    extract::{Path, State},
-    routing::{delete, get},
-    Json,
-    Router,
-};
-
 use clap::Parser;
-use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+use tokio::net::TcpListener;
 
+use constella_db::modules::protocol::{
+  handler::{ReadHandler, WriteHandler},
+  message::{ResponseData, MessageType, Message},
+  serializer::BincodeSerializer,
+};
+use constella_db::modules::cmd::Command;
 use constella_db::modules::db::{
-    Attr,
     Engine,
-    Table,
-    Type,
     Entity,
-    Value,
-    Data,
-    Condition,
-    Operator,
 };
 
+
+/// Commandline arguments
 #[derive(Parser, Debug)]
 struct Args {
   #[arg(short, long)]
@@ -32,330 +23,223 @@ struct Args {
 }
 
 /// Gets the local ip of the machine
-pub fn get_local_ip() -> std::io::Result<std::net::IpAddr> {
+fn get_local_ip() -> std::io::Result<std::net::IpAddr> {
   let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
   socket.connect("8.8.8.8:80")?;
   Ok(socket.local_addr()?.ip())
 }
 
-pub enum ExecuteResult {
-    Ok(String),
-    Error(String),
-    Rows(Vec<Entity>),
+/// State for the service
+struct ServiceState {
+  engine: Engine,
 }
 
-#[derive(Serialize)]
-struct ApiResponse {
-    success: bool,
-    message: Option<String>,
-    rows: Option<Vec<Entity>>,
-}
-
-fn map_response(result: ExecuteResult) -> Json<ApiResponse> {
-    match result {
-        ExecuteResult::Ok(msg) => Json(ApiResponse {
-            success: true,
-            message: Some(msg),
-            rows: None,
-        }),
-
-        ExecuteResult::Error(msg) => Json(ApiResponse {
-            success: false,
-            message: Some(msg),
-            rows: None,
-        }),
-
-        ExecuteResult::Rows(rows) => Json(ApiResponse {
-            success: true,
-            message: None,
-            rows: Some(rows),
-        }),
+impl ServiceState {
+  pub async fn new() -> Self {
+    Self {
+      engine: Engine::new().await,
     }
+  }
 }
 
-#[derive(Clone)]
-struct AppState {
-    engine: Arc<Mutex<Engine>>,
+/// Response from the database is mapped to this enum
+pub enum ExecuteResult {
+  SuccessMsg(String),
+  ErrorMsg(String),
+  Rows(Vec<Entity>),
+  Tables(Vec<String>),
 }
 
-#[derive(Deserialize)]
-struct CreateAttrRequest {
-    name: String,
-    data_type: String,
-}
+/// Execute the command and parse the response
+async fn handle_command(
+  cmd: Command,
+  state: Arc<Mutex<ServiceState>>
+) -> ExecuteResult {
+  match cmd {
 
-#[derive(Deserialize)]
-struct CreateTableRequest {
-    name: String,
-    attrs: Vec<CreateAttrRequest>,
-}
+    Command::CreateTable(table) => {
+      let mut s = state.lock().await;
+      match s.engine.create_table(&table).await {
+        Ok(o)  => ExecuteResult::SuccessMsg(o),
+        Err(e) => ExecuteResult::ErrorMsg(e),
+      }
+    },
 
-#[derive(Deserialize)]
-struct UpdateRequest {
-    conditions: HashMap<String, JsonValue>,
-    updates: HashMap<String, JsonValue>,
-}
+    Command::DropTable(table) => {
+      let mut s = state.lock().await;
+      match s.engine.drop_table(&table).await {
+        Ok(o)  => ExecuteResult::SuccessMsg(o),
+        Err(e) => ExecuteResult::ErrorMsg(e),
+      }
+    },
 
-async fn health() -> &'static str {
-    "DB Service Running"
-}
+    // TODO: Support multiple entities during insert
+    Command::Insert(entity) => {
+      let mut s = state.lock().await;
+      match s.engine.insert(&entity).await {
+        Ok(o)  => ExecuteResult::SuccessMsg(o),
+        Err(e) => ExecuteResult::ErrorMsg(e),
+      }
+    },
 
-async fn create_table(
-    State(state): State<AppState>,
-    Json(req): Json<CreateTableRequest>,
-) -> Json<ApiResponse> {
-    let mut engine = state.engine.lock().await;
-
-    let attrs = req.attrs
-        .into_iter()
-        .map(|a| {
-            let data_type = match a.data_type.to_uppercase().as_str() {
-                "INT" => Type::Int,
-                "STRING" => Type::VarChar(255),
-                _ => Type::VarChar(255),
-            };
-
-            Attr {
-                name: a.name,
-                data_type,
-            }
-        })
+    Command::Select {table, attrs, conditions} => {
+      let attrs_ref: Vec<&str> = attrs.iter()
+        .map(String::as_str)
         .collect();
 
-    let result = match engine.create_table(&Table {
-        name: req.name,
-        attrs,
-    }).await {
-        Ok(_) => ExecuteResult::Ok("Table created successfully".into()),
-        Err(e) => ExecuteResult::Error(e),
+      let mut s = state.lock().await;
+      match s.engine.select(&table, attrs_ref, conditions).await {
+        Ok(o)  => ExecuteResult::Rows(o),
+        Err(e) => ExecuteResult::ErrorMsg(e),
+      }
+    },
+
+    Command::Update {table, updates, conditions} => {
+      let mut s = state.lock().await;
+      match s.engine.update(&table, updates, conditions).await {
+        Ok(o)  => ExecuteResult::SuccessMsg(format!("Updated Rows: {}", o)),
+        Err(e) => ExecuteResult::ErrorMsg(e),
+      }
+    },
+
+    Command::Delete {table, conditions} => {
+      let mut s = state.lock().await;
+      match s.engine.delete(&table, conditions).await {
+        Ok(o)  => ExecuteResult::SuccessMsg(format!("Deleted Rows: {}", o)),
+        Err(e) => ExecuteResult::ErrorMsg(e),
+      }
+    },
+
+    Command::ShowTables => {
+      let s = state.lock().await;
+      match s.engine.list_tables().await {
+        Ok(o)  => ExecuteResult::Tables(o),
+        Err(e) => ExecuteResult::ErrorMsg(e),
+      }
+    },
+  }
+}
+
+/// Convert the database response to the protocol message response
+fn result_to_response(result: ExecuteResult) -> MessageType {
+  match result {
+
+    ExecuteResult::SuccessMsg(msg) => {
+      MessageType::Response {
+        sucess: true,
+        message: Some(msg),
+        data: None,
+      }
+    },
+
+    ExecuteResult::ErrorMsg(msg) => {
+      MessageType::Response {
+        sucess: false,
+        message: Some(msg),
+        data: None,
+      }
+    },
+
+    ExecuteResult::Rows(rows) => {
+      MessageType::Response {
+        sucess: true,
+        message: None,
+        data: Some(ResponseData::Rows(rows)),
+      }
+    },
+
+    ExecuteResult::Tables(tables) => {
+      MessageType::Response {
+        sucess: true,
+        message: None,
+        data: Some(ResponseData::Tables(tables)),
+      }
+    },
+
+  }
+}
+
+/// Responsible to handle the db requests
+async fn connection_listener(
+  read_handler_mutex: Arc<Mutex<ReadHandler>>,
+  write_handler_mutex: Arc<Mutex<WriteHandler>>,
+  state: Arc<Mutex<ServiceState>>
+) {
+  loop {
+    let received = {
+      let mut handler = read_handler_mutex.lock().await;
+      handler.receive().await
     };
 
-    map_response(result)
-}
-
-async fn list_table(
-    State(state): State<AppState>,
-) -> Json<Vec<Table>> {
-    let engine = state.engine.lock().await;
-    Json(engine.get_tables())
-}
-
-async fn drop_table(
-    Path(table_name): Path<String>,
-    State(state): State<AppState>,
-) -> Json<ApiResponse> {
-    let mut engine = state.engine.lock().await;
-
-    let result = match engine.drop_table(&table_name).await {
-        Ok(_) => {
-            ExecuteResult::Ok(format!("Table '{}' deleted", table_name))
-        }
-        Err(e) => ExecuteResult::Error(e),
-    };
-
-    map_response(result)
-}
-
-async fn insert_row(
-    Path(table_name): Path<String>,
-    State(state): State<AppState>,
-    Json(payload): Json<HashMap<String, JsonValue>>,
-) -> Json<ApiResponse> {
-    let mut data = Vec::new();
-
-    for (name, value) in payload {
-        let value = match json_to_db_value(value) {
-            Ok(v) => v,
-            Err(e) => return map_response(ExecuteResult::Error(e)),
-        };
-
-        data.push(Data { name, value });
+    if let Err(e) = received {
+      println!("[LOG] Connection lost due to: {}", e);
+      break;
     }
 
-    let entity = Entity {
-        of: table_name,
-        data,
+    let msg = received.unwrap();
+    let result = match msg.msg_type {
+
+      // Handle the execute command message
+      MessageType::ExecCmd => {
+        match msg.command {
+          Some(cmd) => handle_command(cmd, state.clone()).await,
+          None => ExecuteResult::ErrorMsg("Command is Missing".to_string()),
+        }
+      },
+
+      // Ignore any other message
+      _ => ExecuteResult::ErrorMsg("This only handles ExecCmd Message".to_string()),
     };
 
-    let mut engine = state.engine.lock().await;
+    // Convert the result to the MessageType::Response with datas'
+    let msg_type = result_to_response(result);
+    let response_msg = Message::new(
+      "".to_string(),
+      msg_type,
+      "".to_string()
+    );
 
-    let result = match engine.insert(&entity).await {
-        Ok(_) => ExecuteResult::Ok("Row inserted".into()),
-        Err(e) => ExecuteResult::Error(e),
-    };
-
-    map_response(result)
+    // Send it back to the job schedular microservice
+    let mut writer = write_handler_mutex.lock().await;
+    writer.send(&response_msg).await.unwrap();
+  }
 }
 
-async fn select_rows(
-    Path(table_name): Path<String>,
-    State(state): State<AppState>,
-) -> Json<ApiResponse> {
-    let mut engine = state.engine.lock().await;
+/// Starts the listener in which the job service will connect
+async fn start_listener(state: Arc<Mutex<ServiceState>>, port: u32) {
+  let ip = get_local_ip().unwrap();
+  let listener = TcpListener::bind(
+    format!("{}:{}", ip, port)
+  ).await.unwrap();
 
-    let result = match engine.select(
-        &table_name,
-        vec!["*"],
-        vec![],
-    ).await {
-        Ok(rows) => ExecuteResult::Rows(rows),
-        Err(e) => ExecuteResult::Error(e),
-    };
+  let bound_port = listener.local_addr().unwrap().port();
+  let full_ip = format!("{}:{}", ip, bound_port);
+  println!("[LOG] DB Service listening on {}", &full_ip);
 
-    map_response(result)
-}
+  loop {
+    let (stream, addr) = listener.accept().await.unwrap();
+    println!("[LOG] {} connected", addr);
 
-async fn update_row(
-    Path(table_name): Path<String>,
-    State(state): State<AppState>,
-    Json(req): Json<UpdateRequest>,
-) -> Json<ApiResponse> {
-    let mut updates = Vec::new();
+    let state_clone = state.clone();
 
-    for (name, value) in req.updates {
-        let value = match json_to_db_value(value) {
-            Ok(v) => v,
-            Err(e) => return map_response(ExecuteResult::Error(e)),
-        };
-
-        updates.push(Data { name, value });
-    }
-
-    let mut conditions = Vec::new();
-
-    for (attr, value) in req.conditions {
-        let value = match json_to_db_value(value) {
-            Ok(v) => v,
-            Err(e) => return map_response(ExecuteResult::Error(e)),
-        };
-
-        conditions.push(
-            Condition::Compare {
-                attr,
-                value,
-                op: Operator::Eq,
-            }
-        );
-    }
-
-    let mut engine = state.engine.lock().await;
-
-    let result = match engine.update(
-        &table_name,
-        updates,
-        conditions,
-    ).await {
-        Ok(count) => {
-            ExecuteResult::Ok(
-                format!("{} row(s) updated", count)
-            )
-        }
-        Err(e) => ExecuteResult::Error(e),
-    };
-
-    map_response(result)
-}
-
-async fn delete_row(
-    Path(table_name): Path<String>,
-    State(state): State<AppState>,
-    Json(payload): Json<HashMap<String, JsonValue>>,
-) -> Json<ApiResponse> {
-    let mut conditions = Vec::new();
-
-    for (attr, value) in payload {
-        let value = match json_to_db_value(value) {
-            Ok(v) => v,
-            Err(e) => return map_response(ExecuteResult::Error(e)),
-        };
-
-        conditions.push(
-            Condition::Compare {
-                attr,
-                value,
-                op: Operator::Eq,
-            }
-        );
-    }
-
-    let mut engine = state.engine.lock().await;
-
-    let result = match engine.delete(
-        &table_name,
-        conditions,
-    ).await {
-        Ok(count) => {
-            ExecuteResult::Ok(
-                format!("{} row(s) deleted", count)
-            )
-        }
-        Err(e) => ExecuteResult::Error(e),
-    };
-
-    map_response(result)
-}
-
-fn json_to_db_value(value: JsonValue) -> Result<Value, String> {
-    match value {
-        JsonValue::Number(n) => {
-            match n.as_i64() {
-                Some(i) => Ok(Value::Int(i as i32)),
-                None => Err("Invalid integer".into()),
-            }
-        }
-        JsonValue::String(s) => {
-            Ok(Value::VarChar(s))
-        }
-        _ => Err("Unsupported data format".into()),
-    }
+    let (reader, writer) = stream.into_split();
+    let read_handler = Arc::new(Mutex::new(
+      ReadHandler::new(reader, Box::new(BincodeSerializer))
+    ));
+    let write_handler = Arc::new(Mutex::new(
+      WriteHandler::new(writer, Box::new(BincodeSerializer))
+    ));
+    tokio::spawn(async move {
+      connection_listener(read_handler, write_handler, state_clone).await;
+    });
+  }
 }
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
+  let args = Args::parse();
+  let port = args.port.unwrap_or(0);
 
-    let engine = Engine::new().await;
-
-    let state = AppState {
-        engine: Arc::new(Mutex::new(engine)),
-    };
-
-    // Extract port from args
-    let port = args.port.unwrap_or(0);
-
-    let app = Router::new()
-        .route("/", get(health))
-        .route(
-            "/tables",
-            get(list_table)
-                .post(create_table),
-        )
-        .route(
-            "/tables/{name}",
-            delete(drop_table),
-        )
-        .route(
-            "/tables/{name}/rows",
-            get(select_rows)
-                .post(insert_row)
-                .put(update_row)
-                .delete(delete_row),
-        )
-        .with_state(state);
-
-    let ip = get_local_ip().unwrap_or_else(|_| {
-        "127.0.0.1".parse().unwrap()
-    });
-
-    let listener = TcpListener::bind(
-        format!("{}:{}", ip, port)
-    ).await.unwrap();
-
-    let bound_port = listener.local_addr().unwrap().port();
-    let full_ip = format!("{}:{}", ip, bound_port);
-    println!("DB Service running at http://{}", full_ip);
-
-    axum::serve(listener, app)
-        .await
-        .unwrap();
+  let state = Arc::new(Mutex::new(ServiceState::new().await));
+  start_listener(state, port).await;
 }
