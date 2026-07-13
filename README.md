@@ -1,3 +1,18 @@
+## Run Project
+### Step 1: Run Gateway
+```bash
+cargo run --bin constella_db run-gateway -c {client_listener_port} -n {node_listener_port}
+```
+
+### Step 2: Run Nodes
+Run this command with different node port for multiple nodes
+```bash
+cargo run --bin constella_db run-node -p {node_port} -g {gateway_ip:node_listener_port}
+```
+### Step 3: Run Client
+```bash
+cargo run --bin constella_db run-client -g {gateway_ip:client_listener_port}
+```
 
 ## Create module
 ```bash
@@ -24,34 +39,6 @@ touch bin/test.rs
 ```bash
 cargo run -p {module_name} --bin test
 ```
-
-## Run Project
-### Step 1: Run Gateway
-```bash
-cargo run -p gateway -- -c {client_listener_port} -n {node_listener_port}
-```
-
-### Step 2: Run db service
-```bash
-cargo run -p db_service -- -p {db_service_port}
-```
-
-### Step 3: Run job service
-```bash
-cargo run -p job_service -- -p {job_service_port} -d {db_service_port}
-```
-
-### Step 4: Run node
-```bash
-cargo run -p node -- -p {node_port} -j {job_service_port} -g {node_listener_port}
-```
-
-### Step 5: Run Client
-```bash
-cargo run --bin db_client -- {gateway_ip:client_listener_port}
-```
-
-### Repeat step 2-4 for each node with seperate ports. To generate a full suite of environment run test_generator.py
 
 ## test the client server stuff
 ```bash
