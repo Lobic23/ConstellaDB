@@ -5,7 +5,7 @@ use crate::modules::db::{Condition, Data, Entity, Table};
 pub enum Command {
   CreateTable(Table),
   DropTable(String),
-  Insert(Entity),
+  Insert(Vec<Entity>),
   Select {
     table: String,
     attrs: Vec<String>,

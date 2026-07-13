@@ -73,13 +73,19 @@ async fn handle_command(
       }
     },
 
-    // TODO: Support multiple entities during insert
-    Command::Insert(entity) => {
+    Command::Insert(entities) => {
       let mut s = state.lock().await;
-      match s.engine.insert(&entity).await {
-        Ok(o)  => ExecuteResult::SuccessMsg(o),
-        Err(e) => ExecuteResult::ErrorMsg(e),
+
+      for entity in &entities {
+        if let Err(e) = s.engine.insert(entity).await {
+          return ExecuteResult::ErrorMsg(e);
+        }
       }
+
+      ExecuteResult::SuccessMsg(format!(
+        "{} row(s) inserted",
+        entities.len()
+      ))
     },
 
     Command::Select {table, attrs, conditions} => {

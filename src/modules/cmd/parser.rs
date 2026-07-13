@@ -55,25 +55,39 @@ fn convert_statement(stmt: SqlStatement) -> Result<Command, CmdError> {
       source,
       ..
     } => {
-      let col_names: Vec<String> = columns.into_iter().map(|c| c.value).collect();
-      let source = source.ok_or_else(|| CmdError::Syntax("INSERT requires VALUES".into()))?;
-      let rows = extract_insert_rows(*source)?;
-      let row = rows
+      let col_names: Vec<String> = columns
         .into_iter()
-        .next()
-        .ok_or_else(|| CmdError::Syntax("INSERT requires a row of values".into()))?;
-      if row.len() != col_names.len() {
-        return Err(CmdError::Syntax("column/value count mismatch".into()));
-      }
-      let data = col_names
-        .into_iter()
-        .zip(row)
-        .map(|(name, value)| Data { name, value })
+        .map(|c| c.value)
         .collect();
-      Ok(Command::Insert(Entity {
-        of: table_name.to_string(),
-        data,
-      }))
+
+      let source = source.ok_or_else(
+        || CmdError::Syntax("INSERT requires VALUES".into())
+      )?;
+
+      let rows = extract_insert_rows(*source)?;
+      let mut entities = Vec::new();
+
+      for row in rows {
+        if row.len() != col_names.len() {
+          return Err(CmdError::Syntax(
+            "column/value count mismatch".into(),
+          ));
+        }
+
+        let data = col_names
+          .iter()
+          .cloned()
+          .zip(row)
+          .map(|(name, value)| Data { name, value })
+          .collect();
+
+        entities.push(Entity {
+          of: table_name.to_string(),
+          data,
+        });
+      }
+
+      Ok(Command::Insert(entities))
     }
 
     SqlStatement::Query(query) => convert_select(*query),

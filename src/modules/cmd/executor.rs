@@ -34,10 +34,13 @@ pub async fn execute(engine: &mut Engine, cmd: Command) -> ExecuteResult {
       Err(e) => ExecuteResult::Error(format!("Error: {e}")),
     },
 
-    Command::Insert(e) => match engine.insert(&e).await {
-      Ok(_) => ExecuteResult::Ok(format!("OK: {} row inserted into '{}'", e.data.len(), e.of)),
-      Err(e) => ExecuteResult::Error(format!("Error: {e}")),
-    },
+    Command::Insert(_) => {
+      ExecuteResult::Error("Not worth it".to_string())
+      //match engine.insert(&e).await {
+      //  Ok(_) => ExecuteResult::Ok(format!("OK: {} row inserted into '{}'", e.data.len(), e.of)),
+      //  Err(e) => ExecuteResult::Error(format!("Error: {e}")),
+      //},
+    }
 
     Command::Select {
       table,
