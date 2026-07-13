@@ -1,39 +1,27 @@
 ## Run Project
+
+### Step 0 : popluate .env 
+```bash 
+cp .env.example .env
+```
+
 ### Step 1: Run Gateway
 ```bash
-cargo run --bin constella_db run-gateway -c {client_listener_port} -n {node_listener_port}
+cargo gateway
 ```
 
 ### Step 2: Run Nodes
 Run this command with different node port for multiple nodes
 ```bash
-cargo run --bin constella_db run-node -p {node_port} -g {gateway_ip:node_listener_port}
+cargo node < -p {port} >
 ```
 ### Step 3: Run Client
 ```bash
-cargo run --bin constella_db run-client -g {gateway_ip:client_listener_port}
+cargo client
 ```
 
-## Create module
-```bash
-cargo new src/modules/{module_name} --lib
-```
 
-## Add to workspace in Cargo.toml
-```toml
-[workspace]
-members = [
-  ...
-  "src/modules/{module_name}",
-]
-```
 
-## Make testbed
-```bash
-cd src/modules/{module_name}/src
-mkdir bin
-touch bin/test.rs
-```
 
 ## Run test
 ```bash

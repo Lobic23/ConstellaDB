@@ -50,3 +50,4 @@ sqlparser.workspace = true
 thiserror.workspace = true
 clap.workspace = true
 rand.workspace = true
+dotenvy = "0.15.7"

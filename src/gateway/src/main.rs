@@ -11,21 +11,16 @@ use constella_db::modules::protocol::{
 };
 use constella_db::modules::cmd::parse_cmd;
 
-/// Gets the local ip of the machine
-fn get_local_ip() -> std::io::Result<std::net::IpAddr> {
-  let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
-  socket.connect("8.8.8.8:80")?;
-  Ok(socket.local_addr()?.ip())
-}
-
-/// Commandline args for the node
 #[derive(Parser, Debug)]
 struct Args {
   #[arg(short, long)]
-  client_port: Option<u32>,
+  ip: String,
 
   #[arg(short, long)]
-  node_port: Option<u32>,
+  client_port: u32,
+
+  #[arg(short, long)]
+  node_port: u32,
 }
 
 struct State {
@@ -197,9 +192,7 @@ async fn handle_node_connection(
   }
 }
 
-async fn start_client_listener(state: Arc<Mutex<State>>, client_port: u32) {
-  let ip = get_local_ip().unwrap();
-
+async fn start_client_listener(state: Arc<Mutex<State>>, ip: &str, client_port: u32) {
   // Listener for external clients
   let client_listener = TcpListener::bind(
     format!("{}:{}", ip, client_port)
@@ -228,9 +221,7 @@ async fn start_client_listener(state: Arc<Mutex<State>>, client_port: u32) {
   };
 }
 
-async fn start_node_listener(state: Arc<Mutex<State>>, node_port: u32) {
-  let ip = get_local_ip().unwrap();
-
+async fn start_node_listener(state: Arc<Mutex<State>>, ip: &str, node_port: u32) {
   // Listener for internal nodes
   let node_listener = TcpListener::bind(
     format!("{}:{}", ip, node_port)
@@ -264,19 +255,8 @@ async fn main() {
   let args = Args::parse();
   let state = Arc::new(Mutex::new(State::new()));
 
-  // Extract port from args
-  let mut client_port = 0;
-  if let Some(p) = args.client_port {
-    client_port = p;
-  }
-
-  let mut node_port = 0;
-  if let Some(p) = args.node_port {
-    node_port = p;
-  }
-
   tokio::select! {
-    _ = start_client_listener(state.clone(), client_port) => {},
-    _ = start_node_listener(state.clone(), node_port) => {},
+    _ = start_client_listener(state.clone(), &args.ip, args.client_port) => {},
+    _ = start_node_listener(state.clone(), &args.ip, args.node_port) => {},
   }
 }
