@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 
-use crate::engine::Engine;
-use crate::types::{Condition, DB_DIR, Data, Entity, Type, Value};
+use crate::modules::db::engine::Engine;
+use crate::modules::db::types::{Condition, DB_DIR, Data, Entity, Type, Value};
 
 impl Engine {
   pub async fn insert(&mut self, entity: &Entity) -> Result<(), String> {

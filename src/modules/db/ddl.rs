@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use tokio::fs::{self, File};
 
-use crate::engine::Engine;
-use crate::types::{Attr, DB_DIR, Table, Type, Value};
+use crate::modules::db::engine::Engine;
+use crate::modules::db::types::{Attr, DB_DIR, Table, Type, Value};
 
 pub enum AlterOp {
   AddColumn(Attr),

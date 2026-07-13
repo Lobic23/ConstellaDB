@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-use db_module::{
+use constella_db::modules::db::{
     Attr,
     Engine,
     Table,

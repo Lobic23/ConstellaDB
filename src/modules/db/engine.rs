@@ -2,7 +2,7 @@ use tokio::fs::{self, File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::path::{Path, PathBuf};
 
-use crate::types::{
+use crate::modules::db::types::{
   Attr, Condition, DB_DIR, Data, Entity, Operator, SCHEMA_FILE, Table, Type, Value,
 };
 

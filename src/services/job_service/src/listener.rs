@@ -3,7 +3,7 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
-use protocol_module::{
+use constella_db::modules::protocol::{
   handler::{ReadHandler, WriteHandler},
   message::{MessageType, Message},
   serializer::BincodeSerializer,

@@ -5,9 +5,9 @@ use sqlparser::ast::{
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser as SqlParser;
 
-use crate::ast::Command;
-use crate::error::CmdError;
-use db_module::{Attr, Condition, Data, Entity, Operator, Table, Type, Value};
+use crate::modules::cmd::ast::Command;
+use crate::modules::cmd::error::CmdError;
+use crate::modules::db::{Attr, Condition, Data, Entity, Operator, Table, Type, Value};
 
 pub fn parse_cmd(input: &str) -> Result<Command, CmdError> {
   let dialect = GenericDialect {};

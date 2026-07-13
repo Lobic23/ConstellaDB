@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use db_module::Engine;
+use constella_db::modules::db::Engine;
 
 #[derive(Clone)]
 pub struct AppState {

@@ -3,11 +3,12 @@ mod state;
 
 use clap::Parser;
 use axum::{routing::{get, post}, Router};
-use db_module::Engine;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use state::AppState;
 use handlers::{handle_health, handle_query};
+
+use constella_db::modules::db::Engine;
 
 #[derive(Parser, Debug)]
 struct Args {

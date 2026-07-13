@@ -3,12 +3,12 @@ use std::sync::Arc;
 use serde_json::json;
 use reqwest::Client;
 
-use protocol_module::{
+use constella_db::modules::protocol::{
   handler::WriteHandler,
   message::{MessageType, Message},
 };
-use cmd_module::Command;
-use db_module::{Value, Condition, Type};
+use constella_db::modules::cmd::Command;
+use constella_db::modules::db::{Value, Condition, Type};
 
 use crate::state::ServiceState;
 

@@ -1,16 +1,16 @@
-use cmd_module::{execute, parse_cmd};
-use db_module::Engine;
+use constella_db::modules::cmd::{execute, parse_cmd};
+use constella_db::modules::db::Engine;
 use std::io::{self, Write};
 
 #[tokio::main]
 async fn main() {
   let mut engine = Engine::new().await;
 
-  println!("ConstellaDB CLI");
+  println!("constella_db CLI");
   println!("Type SQL statements. Type 'exit' or 'quit' or 'q' to leave.\n");
 
   loop {
-    print!("constelladb> ");
+    print!("constella_db> ");
     io::stdout().flush().unwrap();
 
     let mut input = String::new();

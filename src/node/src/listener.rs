@@ -5,9 +5,9 @@ use tokio::net::TcpListener;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use cmd_module::format_rows;
-use db_module::Entity;
-use protocol_module::{
+use constella_db::modules::cmd::format_rows;
+use constella_db::modules::db::Entity;
+use constella_db::modules::protocol::{
   handler::{ReadHandler, WriteHandler},
   message::{MessageType, Message},
   serializer::BincodeSerializer,

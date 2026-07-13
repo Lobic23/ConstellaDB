@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-protocol_module.workspace = true
-cmd_module.workspace = true
-db_module.workspace = true
+constella_db.workspace = true
 
 clap.workspace = true
 uuid.workspace = true

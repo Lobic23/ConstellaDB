@@ -1,5 +1,5 @@
-use crate::Command;
-use db_module::{Engine, Entity};
+use crate::modules::cmd::Command;
+use crate::modules::db::{Engine, Entity};
 
 pub enum ExecuteResult {
   Ok(String),

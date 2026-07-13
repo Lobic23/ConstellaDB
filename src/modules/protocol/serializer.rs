@@ -1,4 +1,4 @@
-use crate::message::Message;
+use crate::modules::protocol::message::Message;
 
 pub trait Serializer: Send + Sync {
   fn serialize(&self, message: &Message) -> Result<Vec<u8>, String>;

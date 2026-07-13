@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use db_module::{Condition, Data, Entity, Table};
+use crate::modules::db::{Condition, Data, Entity, Table};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Command {

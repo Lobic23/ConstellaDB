@@ -1,26 +1,20 @@
 [workspace]
 members = [
-  "src/modules/cmd_module",
-  "src/modules/db_module",
-  "src/modules/job_scheduler",
-  "src/modules/protocol_module",
-  "src/modules/job_scheduler",
+  ".",
   "src/services/job_service",
   "src/services/db_service",
   "src/services/query_service",
-  "src/node", 
+  "src/node",
   "src/gateway",
 ]
 
 [package]
-name = "ConstellaDB"
+name = "constella_db"
 version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
-protocol_module = { path = "src/modules/protocol_module" }
-cmd_module = { path = "src/modules/cmd_module" }
-db_module = { path = "src/modules/db_module" }
+constella_db = { path = "." }
 
 tracing = "0.1"
 tracing-subscriber = "0.3"
@@ -38,12 +32,10 @@ reqwest = { version = "0.13.4", features = ["json"] }
 rand = "0.10.2"
 
 [dependencies]
-protocol_module = { workspace = true }
-cmd_module = { workspace = true }
-db_module = { workspace = true }
-
 tokio = { workspace = true }
 uuid = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 bincode = { workspace = true }
+sqlparser.workspace = true
+thiserror.workspace = true

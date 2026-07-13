@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use constella_db::modules::protocol::handler::{ReadHandler, WriteHandler};
 use tokio::sync::Mutex;
 
-use protocol_module::handler::{ReadHandler, WriteHandler};
 
 use crate::instruction::Instruction;
 

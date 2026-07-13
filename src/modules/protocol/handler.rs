@@ -1,5 +1,5 @@
-use crate::message::Message;
-use crate::serializer::Serializer;
+use crate::modules::protocol::message::Message;
+use crate::modules::protocol::serializer::Serializer;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
