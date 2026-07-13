@@ -1,8 +1,7 @@
 [alias]
-net = "run -p network_module"
-db = "run -p db_module"
-prot = " run -p protocol_module"
-cmd = "run -p cmd_module"
-
+gateway = "run --bin constella_db -- run-gateway"
+node = "run --bin constella_db -- run-node"
+client = "run --bin constella_db -- run-client"
+ 
 
 # this way i just need to do cargo net to run the network module seperately

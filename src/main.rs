@@ -5,6 +5,10 @@ use std::process::{Child, Command};
 use std::thread;
 use std::time::Duration;
 
+// cargo gateway
+// cargo node < -p {port} >
+// cargo client
+
 #[derive(Parser, Debug)]
 #[command(arg_required_else_help = true)]
 struct Cli {
@@ -18,46 +22,58 @@ enum CliSubCommand {
   RunNode(NodeCli),
 
   /// Run gateway
-  RunGateway(GatewayCli),
+  RunGateway,
 
   /// Run db client
-  RunClient(ClientCli)
+  RunClient,
 }
 
 #[derive(Parser, Debug)]
-#[command(arg_required_else_help = true)]
 struct NodeCli {
-  /// Address of the gateway to connect to.
-  /// Example: 127.0.0.1:8000
-  #[arg(short, long)]
-  gateway: String,
-
   /// OPTIONAL: Port for the node to listen on.
   /// If not provided, a random port is taken
   #[arg(short, long)]
   port: Option<u32>,
 }
 
-#[derive(Parser, Debug)]
-struct GatewayCli {
-  /// OPTIONAL: Port to which it listens for client.
-  /// If not provided, a random port is taken
-  #[arg(short, long)]
-  client_port: Option<u32>,
-
-  /// OPTIONAL: Port to which it listens for node.
-  /// If not provided, a random port is taken
-  #[arg(short, long)]
-  node_port: Option<u32>,
+/// The gateway's IP and ports, loaded from the .env file.
+/// This is the one and only source for this information -
+/// there is no CLI fallback, and any missing/invalid value is a hard panic.
+struct GatewayConfig {
+  ip: String,
+  client_port: u32,
+  node_port: u32,
 }
 
-#[derive(Parser, Debug)]
-#[command(arg_required_else_help = true)]
-struct ClientCli {
-  /// Address of the gateway to connect to.
-  /// Example: 127.0.0.1:8000
-  #[arg(short, long)]
-  gateway: String,
+impl GatewayConfig {
+  fn load() -> Self {
+    // Loads the .env file in the current directory into the process env.
+    // Panics if the file is missing or unreadable.
+    dotenvy::dotenv().expect("Failed to load .env file");
+
+    let ip = env::var("GATEWAY_IP")
+      .expect("GATEWAY_IP must be set in .env");
+
+    let client_port = env::var("GATEWAY_CLIENT_PORT")
+      .expect("GATEWAY_CLIENT_PORT must be set in .env")
+      .parse::<u32>()
+      .expect("GATEWAY_CLIENT_PORT must be a valid u32");
+
+    let node_port = env::var("GATEWAY_NODE_PORT")
+      .expect("GATEWAY_NODE_PORT must be set in .env")
+      .parse::<u32>()
+      .expect("GATEWAY_NODE_PORT must be a valid u32");
+
+    Self { ip, client_port, node_port }
+  }
+
+  fn node_addr(&self) -> String {
+    format!("{}:{}", self.ip, self.node_port)
+  }
+
+  fn client_addr(&self) -> String {
+    format!("{}:{}", self.ip, self.client_port)
+  }
 }
 
 /// Gets the local ip of the machine
@@ -87,6 +103,10 @@ async fn main() {
     .parent()
     .unwrap()
     .to_path_buf();
+
+  // Load gateway ip/ports up front - panics immediately if .env is
+  // missing or malformed, before any child processes are spawned.
+  let gateway_config = GatewayConfig::load();
 
   match cli.command {
     CliSubCommand::RunNode(n_cli) => {
@@ -129,7 +149,7 @@ async fn main() {
         "-j",
         &format!("{}:{}", ip, job_port),
         "-g",
-        &n_cli.gateway,
+        &gateway_config.node_addr(),
       ]);
       log_command(&node_cmd);
       let mut node = node_cmd.spawn().unwrap();
@@ -144,15 +164,13 @@ async fn main() {
       }
     },
 
-    CliSubCommand::RunGateway(g_cli) => {
-      let client_port = g_cli.client_port.unwrap_or(0);
-      let node_port = g_cli.node_port.unwrap_or(0);
-
+    CliSubCommand::RunGateway => {
       let gateway_path = format!("{}/gateway", exe_dir.display());
       let mut gateway = Command::new(gateway_path)
         .args([
-          "-c", &client_port.to_string(),
-          "-n", &node_port.to_string(),
+          "-i", &gateway_config.ip,
+          "-c", &gateway_config.client_port.to_string(),
+          "-n", &gateway_config.node_port.to_string(),
         ])
         .spawn()
         .unwrap();
@@ -160,12 +178,10 @@ async fn main() {
       gateway.wait().unwrap();
     },
 
-    CliSubCommand::RunClient(c_cli) => {
-      let gateway = c_cli.gateway;
-
+    CliSubCommand::RunClient => {
       let client_path = format!("{}/db_client", exe_dir.display());
       let mut client = Command::new(client_path)
-        .args([&gateway])
+        .args([&gateway_config.client_addr()])
         .spawn()
         .unwrap();
 
