@@ -1,5 +1,4 @@
 // TODOs:
-// [] Make leader do work too
 // [] Proper distribution algorithm
 // [] Backup
 

@@ -8,6 +8,15 @@ members = [
   "src/gateway",
 ]
 
+default-members = [
+  ".",
+  "src/node/services/job_service",
+  "src/node/services/db_service",
+  "src/node/services/query_service",
+  "src/node",
+  "src/gateway",
+]
+
 [package]
 name = "constella_db"
 version = "0.1.0"

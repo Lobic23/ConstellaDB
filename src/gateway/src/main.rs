@@ -73,9 +73,11 @@ async fn handle_client_connection(
           Ok(cmd) => {
             let mut s = state.lock().await;
             let l = s.leader.clone().expect("Leader is not found");
+
+            // Now the followers will include leader as well
+            // to make leader work identical to the follower
             let followers: Vec<String> = s.nodes
               .keys()
-              .filter(|id| Some(*id) != s.leader.as_ref())
               .cloned()
               .collect();
 
@@ -111,7 +113,7 @@ async fn handle_client_connection(
         }
       },
 
-      _ => {println!("Unexpected!");},
+      _ => println!("Unexpected!"),
     }
   }
 }
