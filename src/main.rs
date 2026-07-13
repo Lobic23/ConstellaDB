@@ -32,21 +32,20 @@ struct NodeCli {
   #[arg(short, long)]
   gateway: String,
 
-  /// Port for the node to listen on.
+  /// OPTIONAL: Port for the node to listen on.
   /// If not provided, a random port is taken
   #[arg(short, long)]
   port: Option<u32>,
 }
 
 #[derive(Parser, Debug)]
-#[command(arg_required_else_help = true)]
 struct GatewayCli {
-  /// Port to which it listens for client.
+  /// OPTIONAL: Port to which it listens for client.
   /// If not provided, a random port is taken
   #[arg(short, long)]
   client_port: Option<u32>,
 
-  /// Port to which it listens for node.
+  /// OPTIONAL: Port to which it listens for node.
   /// If not provided, a random port is taken
   #[arg(short, long)]
   node_port: Option<u32>,
