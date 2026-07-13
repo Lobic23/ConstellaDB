@@ -1,0 +1,16 @@
+[package]
+name = "query_service"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+constella_db.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+axum.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap.workspace = true

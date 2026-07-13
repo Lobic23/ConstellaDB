@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use tokio::sync::Mutex;
 use tokio::net::TcpStream;
 
-use db_module::Entity;
-use protocol_module::{
+use constella_db::modules::db::Entity;
+use constella_db::modules::protocol::{
   handler::{ReadHandler, WriteHandler},
   message::Message,
   serializer::BincodeSerializer,

@@ -13,14 +13,19 @@ use clap::Parser;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use protocol_module::{
+use constella_db::modules::protocol::{
   handler::{ReadHandler, WriteHandler},
   serializer::BincodeSerializer,
   message::{Message, MessageType},
 };
 
 use node::Node;
-use listener::{get_local_ip, start_listener, job_message_handler, gateway_message_handler};
+use listener::{
+  get_local_ip,
+  start_listener,
+  job_message_handler,
+  gateway_message_handler
+};
 
 /// Commandline args for the node
 #[derive(Parser, Debug)]

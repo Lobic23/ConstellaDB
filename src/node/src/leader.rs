@@ -1,13 +1,10 @@
 /// Here lies the functionality of the leader node
 
 use std::sync::Arc;
+use constella_db::modules::{cmd::Command, protocol::{Message, MessageType}};
 use tokio::sync::Mutex;
 use rand::seq::IteratorRandom;
 
-use protocol_module::{
-  message::{Message, MessageType},
-};
-use cmd_module::Command;
 
 use crate::node::Node;
 

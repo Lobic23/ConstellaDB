@@ -1,9 +1,7 @@
-use uuid::Uuid;
-use protocol_module::handler::ProtocolHandler;
-use protocol_module::message::{Message, MessageType};
-use protocol_module::serializer::BincodeSerializer;
 use std::io::{self, Write};
+use constella_db::modules::protocol::{BincodeSerializer, Message, MessageType, ProtocolHandler};
 use tokio::net::TcpStream;
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
@@ -23,7 +21,7 @@ async fn main() {
   let stdin = io::stdin();
 
   loop {
-    print!("constelladb> ");
+    print!("constella_db> ");
     io::stdout().flush().unwrap();
 
     let mut input = String::new();

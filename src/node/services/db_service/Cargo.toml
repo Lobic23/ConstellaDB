@@ -1,15 +1,14 @@
 [package]
-name = "node"
+name = "db_service"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 constella_db.workspace = true
 
-clap.workspace = true
-uuid.workspace = true
-bincode.workspace = true
+
+axum.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-rand.workspace = true
+clap.workspace = true

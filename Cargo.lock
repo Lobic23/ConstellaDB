@@ -3,20 +3,6 @@
 version = 4
 
 [[package]]
-name = "ConstellaDB"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "cmd_module",
- "db_module",
- "protocol_module",
- "serde",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "anstream"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -264,18 +250,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cmd_module"
-version = "0.1.0"
-dependencies = [
- "db_module",
- "serde",
- "serde_json",
- "sqlparser",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -289,6 +263,21 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "constella_db"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "clap",
+ "rand 0.10.2",
+ "serde",
+ "serde_json",
+ "sqlparser",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -327,36 +316,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam-channel"
-version = "0.5.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-utils"
-version = "0.8.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
-
-[[package]]
-name = "db_module"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "db_service"
 version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
- "db_module",
+ "constella_db",
  "serde",
  "serde_json",
  "tokio",
@@ -476,8 +441,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "clap",
- "cmd_module",
- "protocol_module",
+ "constella_db",
  "serde",
  "serde_json",
  "tokio",
@@ -842,22 +806,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "job_scheduler"
-version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "uuid",
-]
-
-[[package]]
 name = "job_service"
 version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
- "cmd_module",
- "db_module",
- "protocol_module",
+ "constella_db",
  "reqwest",
  "serde",
  "serde_json",
@@ -960,9 +914,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "clap",
- "cmd_module",
- "db_module",
- "protocol_module",
+ "constella_db",
  "rand 0.10.2",
  "serde",
  "serde_json",
@@ -1060,24 +1012,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "protocol_module"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "cmd_module",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "query_service"
 version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
- "cmd_module",
- "db_module",
+ "constella_db",
  "serde",
  "serde_json",
  "tokio",
