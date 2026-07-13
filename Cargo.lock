@@ -270,6 +270,8 @@ name = "constella_db"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "clap",
+ "rand 0.10.2",
  "serde",
  "serde_json",
  "sqlparser",

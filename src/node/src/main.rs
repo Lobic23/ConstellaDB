@@ -20,7 +20,12 @@ use constella_db::modules::protocol::{
 };
 
 use node::Node;
-use listener::{get_local_ip, start_listener, job_message_handler, gateway_message_handler};
+use listener::{
+  get_local_ip,
+  start_listener,
+  job_message_handler,
+  gateway_message_handler
+};
 
 /// Commandline args for the node
 #[derive(Parser, Debug)]

@@ -313,15 +313,15 @@ fn json_to_db_value(value: JsonValue) -> Result<Value, String> {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    
+
     let engine = Engine::new().await;
-    
+
     let state = AppState {
         engine: Arc::new(Mutex::new(engine)),
     };
 
     // Extract port from args
-    let port = args.port.unwrap_or(8080);
+    let port = args.port.unwrap_or(0);
 
     let app = Router::new()
         .route("/", get(health))
@@ -350,7 +350,7 @@ async fn main() {
     let listener = TcpListener::bind(
         format!("{}:{}", ip, port)
     ).await.unwrap();
-    
+
     let bound_port = listener.local_addr().unwrap().port();
     let full_ip = format!("{}:{}", ip, bound_port);
     println!("DB Service running at http://{}", full_ip);
