@@ -31,6 +31,7 @@ if __name__ == "__main__":
   copy(f"{HERE}/target/debug/node", f"{OUT_DIR}/")
   copy(f"{HERE}/target/debug/job_service", f"{OUT_DIR}/")
   copy(f"{HERE}/target/debug/db_service", f"{OUT_DIR}/")
+  copy(f"{HERE}/target/debug/db_client", f"{OUT_DIR}/")
 
   with open(f"{OUT_DIR}/.env", "w") as f:
     f.writelines([
