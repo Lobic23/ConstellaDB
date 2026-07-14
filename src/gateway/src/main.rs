@@ -94,12 +94,15 @@ async fn handle_client_connection(
             s.requests.insert(msg.id.clone(), write_handler_mutex.clone());
           },
           Err(e) => {
-            let mut response = Message::new(
+            let response = Message::new(
               "".to_string(),
-              MessageType::Response{sucess: true, message: None, data: None},
+              MessageType::Response {
+                sucess: false,
+                message: Some(e.to_string()),
+                data: None
+              },
               "".to_string()
             );
-            response = response.with_payload(e.to_string().into_bytes());
 
             let mut w = write_handler_mutex.lock().await;
             w.send(&response).await.unwrap();
