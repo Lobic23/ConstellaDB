@@ -34,6 +34,7 @@ pub async fn distribute_message(msg: &Message, node: Arc<Mutex<Node>>) {
     match new_msg.command.as_ref().unwrap() {
 
       // Distribute to a random follower when insert is sent
+      // TODO(slok): Distribute chunked data if multiple insert data is given
       Command::Insert(_) => {
         let chosen = {
           let mut rng = rand::rng();

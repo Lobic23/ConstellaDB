@@ -118,10 +118,13 @@ pub async fn follower_message_handler(
                   }
                 }
               }
+
+              // Here tables are not extended cuz it is assumed that every table lies in
+              // every node, so concatenating the tables results to duplicated table names
               ResponseData::Tables(tables) => {
                 match &mut instruction.response_data {
-                  Some(ResponseData::Tables(existing_tables)) => {
-                    existing_tables.extend(tables.clone());
+                  Some(ResponseData::Tables(_)) => {
+                    instruction.response_data = Some(ResponseData::Tables(tables.to_vec()));
                   }
                   Some(ResponseData::Rows(_)) => {
                     // Unexpected response type
