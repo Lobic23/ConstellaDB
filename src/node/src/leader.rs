@@ -3,8 +3,6 @@
 use std::sync::Arc;
 use constella_db::modules::{cmd::Command, protocol::{Message, MessageType}};
 use tokio::sync::Mutex;
-use rand::seq::IteratorRandom;
-
 
 use crate::node::Node;
 
@@ -35,32 +33,49 @@ pub async fn distribute_message(msg: &Message, node: Arc<Mutex<Node>>) {
 
       // Distribute to a random follower when insert is sent
       // TODO(slok): Distribute chunked data if multiple insert data is given
-      Command::Insert(_) => {
-        let chosen = {
-          let mut rng = rand::rng();
+      Command::Insert(entities) => {
+        let followers: Vec<_> = instruction
+          .followers
+          .iter()
+          .map(|(ip, (_, writer))| (ip.clone(), writer.clone()))
+          .collect();
 
-          instruction
-           .followers
-            .iter()
-            .choose(&mut rng)
-            .map(|(ip, (_, writer))| {
-              (ip.clone(), writer.clone())
-            })
-        };
-
-        if let Some((ip, write_handler)) = chosen {
-          // Remove non selected followers from instruction's status
-          {
-            let mut status = instruction.nodes_status.lock().await;
-            status.retain(|node| node.id == ip);
-          }
-
-          let mut handler = write_handler.lock().await;
-          handler.send(&new_msg).await.unwrap();
-
-          println!("[LOG] Sent INSERT to {}:\n{:#?}", ip, new_msg);
+        if followers.is_empty() {
+          return;
         }
-      }
+
+        let total = entities.len();
+        let num_followers = followers.len();
+
+        // ceil(total / num_followers)
+        let chunk_size = total.div_ceil(num_followers);
+
+        let mut used_followers = Vec::new();
+
+        for ((ip, writer), chunk) in followers
+          .into_iter()
+          .zip(entities.chunks(chunk_size))
+        {
+          used_followers.push(ip.clone());
+
+          let mut msg = new_msg.clone();
+          *msg.command.as_mut().unwrap() = Command::Insert(chunk.to_vec());
+
+          let mut handler = writer.lock().await;
+          handler.send(&msg).await.unwrap();
+
+          println!(
+            "[LOG] Sent {} rows to {}",
+            chunk.len(),
+            ip
+          );
+        }
+
+        {
+          let mut status = instruction.nodes_status.lock().await;
+          status.retain(|node| used_followers.contains(&node.id));
+        }
+      },
 
       _ => {
         for (ip, (_, write_handler)) in &instruction.followers {

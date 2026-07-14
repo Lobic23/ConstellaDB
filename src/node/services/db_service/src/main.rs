@@ -48,6 +48,7 @@ pub enum ExecuteResult {
   ErrorMsg(String),
   Rows(Vec<Entity>),
   Tables(Vec<String>),
+  Count(usize),
 }
 
 /// Execute the command and parse the response
@@ -82,10 +83,7 @@ async fn handle_command(
         }
       }
 
-      ExecuteResult::SuccessMsg(format!(
-        "{} row(s) inserted",
-        entities.len()
-      ))
+      ExecuteResult::Count(entities.len())
     },
 
     Command::Select {table, attrs, conditions} => {
@@ -103,7 +101,7 @@ async fn handle_command(
     Command::Update {table, updates, conditions} => {
       let mut s = state.lock().await;
       match s.engine.update(&table, updates, conditions).await {
-        Ok(o)  => ExecuteResult::SuccessMsg(format!("Updated Rows: {}", o)),
+        Ok(o)  => ExecuteResult::Count(o),
         Err(e) => ExecuteResult::ErrorMsg(e),
       }
     },
@@ -111,7 +109,7 @@ async fn handle_command(
     Command::Delete {table, conditions} => {
       let mut s = state.lock().await;
       match s.engine.delete(&table, conditions).await {
-        Ok(o)  => ExecuteResult::SuccessMsg(format!("Deleted Rows: {}", o)),
+        Ok(o)  => ExecuteResult::Count(o),
         Err(e) => ExecuteResult::ErrorMsg(e),
       }
     },
@@ -162,6 +160,13 @@ fn result_to_response(result: ExecuteResult) -> MessageType {
       }
     },
 
+    ExecuteResult::Count(count) => {
+      MessageType::Response {
+        sucess: true,
+        message: None,
+        data: Some(ResponseData::Count(count)),
+      }
+    },
   }
 }
 

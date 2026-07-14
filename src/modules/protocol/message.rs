@@ -6,8 +6,9 @@ use crate::modules::db::Entity;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ResponseData {
-  Rows(Vec<Entity>),
-  Tables(Vec<String>),
+  Rows(Vec<Entity>),     // Results of select
+  Tables(Vec<String>),   // Results of show tables
+  Count(usize),          // Results of update, delete, insert or any modification functions
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

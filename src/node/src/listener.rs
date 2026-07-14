@@ -110,14 +110,14 @@ pub async fn follower_message_handler(
                   Some(ResponseData::Rows(existing_rows)) => {
                     existing_rows.extend(rows.clone());
                   }
-                  Some(ResponseData::Tables(_)) => {
+                  Some(_) => {
                     // Unexpected response type
                   }
                   None => {
                     instruction.response_data = Some(ResponseData::Rows(rows.to_vec()));
                   }
                 }
-              }
+              },
 
               // Here tables are not extended cuz it is assumed that every table lies in
               // every node, so concatenating the tables results to duplicated table names
@@ -126,14 +126,28 @@ pub async fn follower_message_handler(
                   Some(ResponseData::Tables(_)) => {
                     instruction.response_data = Some(ResponseData::Tables(tables.to_vec()));
                   }
-                  Some(ResponseData::Rows(_)) => {
+                  Some(_) => {
                     // Unexpected response type
                   }
                   None => {
                     instruction.response_data = Some(ResponseData::Tables(tables.to_vec()));
                   }
                 }
-              }
+              },
+
+              ResponseData::Count(count) => {
+                match &mut instruction.response_data {
+                  Some(ResponseData::Count(existing_count)) => {
+                    *existing_count += count;
+                  }
+                  Some(_) => {
+                    // Unexpected response type
+                  }
+                  None => {
+                    instruction.response_data = Some(ResponseData::Count(*count));
+                  }
+                }
+              },
             }
           }
         }
